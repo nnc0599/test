@@ -178,12 +178,14 @@ class MainWindow(QMainWindow):
     def _build_order_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         customer_box = QGroupBox("Thông tin lên đơn")
+        customer_box.setMaximumHeight(122)
         customer_grid = QGridLayout(customer_box)
-        customer_grid.setHorizontalSpacing(8)
-        customer_grid.setVerticalSpacing(6)
+        customer_grid.setContentsMargins(10, 8, 10, 8)
+        customer_grid.setHorizontalSpacing(6)
+        customer_grid.setVerticalSpacing(4)
 
         self.order_name = QLineEdit()
         self.order_phone = QLineEdit()
@@ -195,8 +197,19 @@ class MainWindow(QMainWindow):
         self.order_tax_code = QLineEdit()
         self.customer_suggestion_list = QListWidget()
         self.customer_suggestion_list.setAlternatingRowColors(True)
-        self.customer_suggestion_list.setMaximumHeight(120)
+        self.customer_suggestion_list.setMaximumHeight(84)
         self.customer_suggestion_list.hide()
+
+        compact_inputs = [
+            self.order_name,
+            self.order_phone,
+            self.order_created_at,
+            self.order_address,
+            self.order_email,
+            self.order_tax_code,
+        ]
+        for widget in compact_inputs:
+            widget.setMaximumHeight(32)
 
         customer_grid.addWidget(QLabel("Nhập họ tên"), 0, 0)
         customer_grid.addWidget(self.order_name, 0, 1)
@@ -220,26 +233,33 @@ class MainWindow(QMainWindow):
         layout.addWidget(customer_box)
 
         add_item_box = QGroupBox("Thêm hàng hóa")
+        add_item_box.setMaximumHeight(86)
         add_grid = QGridLayout(add_item_box)
-        add_grid.setHorizontalSpacing(8)
-        add_grid.setVerticalSpacing(6)
+        add_grid.setContentsMargins(10, 8, 10, 8)
+        add_grid.setHorizontalSpacing(6)
+        add_grid.setVerticalSpacing(4)
 
         self.search_product_edit = QLineEdit()
         self.search_product_edit.setPlaceholderText("Tìm kiếm sản phẩm")
+        self.search_product_edit.setMaximumHeight(32)
         self.search_product_list = QListWidget()
         self.search_product_list.setAlternatingRowColors(True)
-        self.search_product_list.setMaximumHeight(140)
+        self.search_product_list.setMaximumHeight(96)
         self.search_product_list.hide()
 
         self.select_product_btn = QPushButton("Chọn sản phẩm")
+        self.select_product_btn.setMaximumHeight(32)
         self.select_product_btn.clicked.connect(self._pick_product_from_input)
 
         self.order_qty_spin = QSpinBox()
         self.order_qty_spin.setRange(1, 1_000_000_000)
+        self.order_qty_spin.setMaximumHeight(32)
         self.order_price_spin = QSpinBox()
         self.order_price_spin.setRange(0, 2_000_000_000)
+        self.order_price_spin.setMaximumHeight(32)
 
         self.add_line_btn = QPushButton("Thêm vào danh sách")
+        self.add_line_btn.setMaximumHeight(32)
         self.add_line_btn.clicked.connect(self._append_invoice_line)
 
         add_grid.addWidget(QLabel("Tìm kiếm sản phẩm"), 0, 0)
@@ -269,16 +289,20 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.Fixed)
-        layout.addWidget(self.order_table)
+        layout.addWidget(self.order_table, 1)
 
         payment_box = QGroupBox("Tổng tiền hóa đơn")
+        payment_box.setMaximumHeight(98)
         payment_form = QFormLayout(payment_box)
+        payment_form.setContentsMargins(10, 8, 10, 8)
+        payment_form.setVerticalSpacing(4)
 
         self.total_goods_text_label = QLabel("Tổng tiền hàng")
         self.total_goods_label = QLabel("0")
         self.ship_fee_spin = QSpinBox()
         self.ship_fee_spin.setRange(0, 2_000_000_000)
         self.ship_fee_spin.setValue(0)
+        self.ship_fee_spin.setMaximumHeight(32)
         self.total_all_label = QLabel("0")
 
         payment_form.addRow(self.total_goods_text_label, self.total_goods_label)
@@ -288,22 +312,23 @@ class MainWindow(QMainWindow):
         layout.addWidget(payment_box)
 
         export_location_box = QGroupBox("Nơi lưu file hóa đơn")
-        export_location_box.setMaximumHeight(64)
+        export_location_box.setMaximumHeight(54)
         export_location_layout = QHBoxLayout(export_location_box)
-        export_location_layout.setContentsMargins(10, 4, 10, 6)
-        export_location_layout.setSpacing(8)
+        export_location_layout.setContentsMargins(10, 2, 10, 4)
+        export_location_layout.setSpacing(6)
         self.export_dir_label = QLabel(str(self.invoice_export_dir))
         self.export_dir_label.setWordWrap(False)
-        self.export_dir_label.setMinimumHeight(20)
+        self.export_dir_label.setMinimumHeight(18)
         self.choose_export_dir_btn = QPushButton("Chọn nơi lưu file")
+        self.choose_export_dir_btn.setMaximumHeight(30)
         self.choose_export_dir_btn.clicked.connect(self._choose_invoice_export_dir)
         export_location_layout.addWidget(self.export_dir_label, 1)
         export_location_layout.addWidget(self.choose_export_dir_btn)
         layout.addWidget(export_location_box)
 
         self.export_btn = QPushButton("XUẤT HÓA ĐƠN")
-        self.export_btn.setMinimumHeight(48)
-        self.export_btn.setMaximumWidth(280)
+        self.export_btn.setMinimumHeight(40)
+        self.export_btn.setMaximumWidth(240)
         self.export_btn.setStyleSheet(
             "QPushButton { background: #0EA5E9; color: white; font-weight: 800; }"
             "QPushButton:hover { background: #0284C7; }"
