@@ -169,10 +169,12 @@ class MainWindow(QMainWindow):
     def _build_order_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(10)
+        layout.setSpacing(8)
 
         customer_box = QGroupBox("Thông tin lên đơn")
         customer_grid = QGridLayout(customer_box)
+        customer_grid.setHorizontalSpacing(8)
+        customer_grid.setVerticalSpacing(6)
 
         self.order_name = QLineEdit()
         self.order_phone = QLineEdit()
@@ -180,9 +182,11 @@ class MainWindow(QMainWindow):
         self.order_created_at.setReadOnly(True)
 
         self.order_address = QLineEdit()
+        self.order_email = QLineEdit()
+        self.order_tax_code = QLineEdit()
         self.customer_suggestion_list = QListWidget()
         self.customer_suggestion_list.setAlternatingRowColors(True)
-        self.customer_suggestion_list.setMaximumHeight(140)
+        self.customer_suggestion_list.setMaximumHeight(120)
         self.customer_suggestion_list.hide()
 
         customer_grid.addWidget(QLabel("Nhập họ tên"), 0, 0)
@@ -193,23 +197,30 @@ class MainWindow(QMainWindow):
         customer_grid.addWidget(self.order_created_at, 0, 5)
 
         customer_grid.addWidget(QLabel("Địa chỉ"), 1, 0)
-        customer_grid.addWidget(self.order_address, 1, 1, 1, 5)
+        customer_grid.addWidget(self.order_address, 1, 1)
+        customer_grid.addWidget(QLabel("Gmail"), 1, 2)
+        customer_grid.addWidget(self.order_email, 1, 3)
+        customer_grid.addWidget(QLabel("Mã số thuế"), 1, 4)
+        customer_grid.addWidget(self.order_tax_code, 1, 5)
         customer_grid.addWidget(self.customer_suggestion_list, 2, 1, 1, 5)
+
+        customer_grid.setColumnStretch(1, 3)
+        customer_grid.setColumnStretch(3, 2)
+        customer_grid.setColumnStretch(5, 2)
 
         layout.addWidget(customer_box)
 
         add_item_box = QGroupBox("Thêm hàng hóa")
         add_grid = QGridLayout(add_item_box)
+        add_grid.setHorizontalSpacing(8)
+        add_grid.setVerticalSpacing(6)
 
         self.search_product_edit = QLineEdit()
         self.search_product_edit.setPlaceholderText("Tìm kiếm sản phẩm")
         self.search_product_list = QListWidget()
         self.search_product_list.setAlternatingRowColors(True)
-        self.search_product_list.setMaximumHeight(180)
+        self.search_product_list.setMaximumHeight(140)
         self.search_product_list.hide()
-
-        self.view_desc_btn = QPushButton("Xem thêm")
-        self.view_desc_btn.clicked.connect(self._show_selected_product_desc)
 
         self.select_product_btn = QPushButton("Chọn sản phẩm")
         self.select_product_btn.clicked.connect(self._pick_product_from_input)
@@ -228,14 +239,13 @@ class MainWindow(QMainWindow):
         add_grid.addWidget(QLabel("Tìm kiếm sản phẩm"), 0, 0)
         add_grid.addWidget(self.search_product_edit, 0, 1, 1, 2)
         add_grid.addWidget(self.select_product_btn, 0, 3)
-        add_grid.addWidget(self.view_desc_btn, 0, 4)
-        add_grid.addWidget(QLabel("Số lượng"), 0, 5)
-        add_grid.addWidget(self.order_qty_spin, 0, 6)
-        add_grid.addWidget(QLabel("Đơn giá"), 0, 7)
-        add_grid.addWidget(self.order_price_spin, 0, 8)
-        add_grid.addWidget(self.add_line_btn, 0, 9)
-        add_grid.addWidget(self.search_product_list, 1, 1, 1, 4)
-        add_grid.addWidget(self.order_qty_hint, 1, 5, 1, 5)
+        add_grid.addWidget(QLabel("Số lượng"), 0, 4)
+        add_grid.addWidget(self.order_qty_spin, 0, 5)
+        add_grid.addWidget(QLabel("Đơn giá"), 0, 6)
+        add_grid.addWidget(self.order_price_spin, 0, 7)
+        add_grid.addWidget(self.add_line_btn, 0, 8)
+        add_grid.addWidget(self.search_product_list, 1, 1, 1, 3)
+        add_grid.addWidget(self.order_qty_hint, 1, 4, 1, 5)
 
         layout.addWidget(add_item_box)
 
@@ -248,8 +258,8 @@ class MainWindow(QMainWindow):
         self.order_table.setSelectionBehavior(QTableWidget.SelectRows)
         header = self.order_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.Interactive)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
@@ -258,10 +268,15 @@ class MainWindow(QMainWindow):
         payment_box = QGroupBox("Tổng tiền hóa đơn")
         payment_form = QFormLayout(payment_box)
 
+        self.total_goods_text_label = QLabel("Tổng tiền hàng")
         self.total_goods_label = QLabel("0")
+        self.ship_fee_spin = QSpinBox()
+        self.ship_fee_spin.setRange(0, 2_000_000_000)
+        self.ship_fee_spin.setValue(0)
         self.total_all_label = QLabel("0")
 
-        payment_form.addRow("Tiền hàng", self.total_goods_label)
+        payment_form.addRow(self.total_goods_text_label, self.total_goods_label)
+        payment_form.addRow("Phí ship", self.ship_fee_spin)
         payment_form.addRow("Tổng số tiền", self.total_all_label)
 
         layout.addWidget(payment_box)
@@ -280,9 +295,14 @@ class MainWindow(QMainWindow):
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
         self.search_product_list.itemClicked.connect(self._on_product_suggestion_clicked)
         self.order_qty_spin.valueChanged.connect(self._update_quantity_hint)
+        self.ship_fee_spin.valueChanged.connect(self._update_invoice_totals)
         self.order_name.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.order_phone.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
+        self.order_email.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
+        self.order_tax_code.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.customer_suggestion_list.itemClicked.connect(self._on_customer_suggestion_clicked)
+
+        self._sync_order_table_widths()
 
         return page
 
@@ -310,7 +330,14 @@ class MainWindow(QMainWindow):
 
         if self.customer_suggestion_list.isVisible() and not any(
             self._widget_is_within(clicked_widget, widget)
-            for widget in [self.customer_suggestion_list, self.order_name, self.order_phone, self.order_address]
+            for widget in [
+                self.customer_suggestion_list,
+                self.order_name,
+                self.order_phone,
+                self.order_address,
+                self.order_email,
+                self.order_tax_code,
+            ]
         ):
             self.customer_suggestion_list.hide()
 
@@ -320,14 +347,9 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         actions = QHBoxLayout()
-        self.btn_add_product = QPushButton("Thêm sản phẩm")
         self.btn_edit_product = QPushButton("Sửa thông tin")
         self.btn_delete_product = QPushButton("Xóa sản phẩm")
 
-        self.btn_add_product.setStyleSheet(
-            "QPushButton { background: #22C55E; color: #0B1A10; }"
-            "QPushButton:hover { background: #16A34A; color: white; }"
-        )
         self.btn_edit_product.setStyleSheet(
             "QPushButton { background: #FDBA74; color: #4A2A00; }"
             "QPushButton:hover { background: #FB923C; color: white; }"
@@ -339,7 +361,7 @@ class MainWindow(QMainWindow):
             "QPushButton:disabled { background: #FECACA; color: #7F1D1D; }"
         )
 
-        for btn in [self.btn_add_product, self.btn_edit_product, self.btn_delete_product]:
+        for btn in [self.btn_edit_product, self.btn_delete_product]:
             btn.setMinimumHeight(56)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             actions.addWidget(btn)
@@ -367,7 +389,6 @@ class MainWindow(QMainWindow):
         self.btn_edit_product.setEnabled(False)
         self.btn_delete_product.setEnabled(False)
 
-        self.btn_add_product.clicked.connect(self._on_add_product)
         self.btn_edit_product.clicked.connect(self._on_edit_product)
         self.btn_delete_product.clicked.connect(self._on_delete_product)
         self.product_table.itemSelectionChanged.connect(self._sync_product_action_state)
@@ -422,16 +443,20 @@ class MainWindow(QMainWindow):
 
         customer_group = QGroupBox("Khách hàng đã lưu")
         customer_layout = QVBoxLayout(customer_group)
-        self.customer_table = QTableWidget(0, 4)
-        self.customer_table.setHorizontalHeaderLabels(["Họ tên", "Số điện thoại", "Địa chỉ", "Ghi chú"])
+        self.customer_table = QTableWidget(0, 6)
+        self.customer_table.setHorizontalHeaderLabels(
+            ["Họ tên", "Số điện thoại", "Gmail", "Mã số thuế", "Địa chỉ", "Ghi chú"]
+        )
         self.customer_table.verticalHeader().setVisible(False)
         self.customer_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.customer_table.setSelectionBehavior(QTableWidget.SelectRows)
         customer_header = self.customer_table.horizontalHeader()
         customer_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         customer_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        customer_header.setSectionResizeMode(2, QHeaderView.Stretch)
-        customer_header.setSectionResizeMode(3, QHeaderView.Stretch)
+        customer_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        customer_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        customer_header.setSectionResizeMode(4, QHeaderView.Stretch)
+        customer_header.setSectionResizeMode(5, QHeaderView.Stretch)
         customer_layout.addWidget(self.customer_table)
 
         invoice_group = QGroupBox("Danh sách hóa đơn")
@@ -588,7 +613,9 @@ class MainWindow(QMainWindow):
 
         name_keyword = self.order_name.text().strip()
         phone_keyword = self.order_phone.text().strip()
-        keyword = phone_keyword or name_keyword
+        email_keyword = self.order_email.text().strip()
+        tax_code_keyword = self.order_tax_code.text().strip()
+        keyword = phone_keyword or email_keyword or tax_code_keyword or name_keyword
 
         self.customer_suggestion_list.clear()
         if not keyword:
@@ -603,6 +630,7 @@ class MainWindow(QMainWindow):
         for customer in customers:
             label = (
                 f"{customer.get('full_name', '')} | {customer.get('phone', '')}"
+                f" | {customer.get('email', '')} | {customer.get('tax_code', '')}"
                 f" | {customer.get('address', '')}"
             )
             item = QListWidgetItem(label)
@@ -618,6 +646,8 @@ class MainWindow(QMainWindow):
         self.order_name.setText(customer.get("full_name", ""))
         self.order_phone.setText(customer.get("phone", ""))
         self.order_address.setText(customer.get("address", ""))
+        self.order_email.setText(customer.get("email", ""))
+        self.order_tax_code.setText(customer.get("tax_code", ""))
         self._suspend_customer_search = False
         self.customer_suggestion_list.hide()
 
@@ -710,9 +740,14 @@ class MainWindow(QMainWindow):
             for col, value in enumerate(values):
                 self.order_table.setItem(idx - 1, col, QTableWidgetItem(value))
 
-    def _update_invoice_totals(self) -> None:
+    def _calculate_invoice_totals(self) -> tuple[int, int, int]:
         total_goods = sum(int(line["line_total"]) for line in self.invoice_lines)
-        total_all = total_goods
+        ship_fee = self.ship_fee_spin.value()
+        total_all = total_goods + ship_fee
+        return total_goods, ship_fee, total_all
+
+    def _update_invoice_totals(self) -> None:
+        total_goods, _, total_all = self._calculate_invoice_totals()
         self.total_goods_label.setText(format_money(total_goods))
         self.total_all_label.setText(format_money(total_all))
 
@@ -720,18 +755,21 @@ class MainWindow(QMainWindow):
         try:
             created_at = self.order_created_at.text().strip() or now_iso_utc7()
             invoice_no = f"HD{created_at.replace('-', '').replace(':', '').replace(' ', '')}"
-            total_goods = sum(int(line["line_total"]) for line in self.invoice_lines)
-            total_all = total_goods
+            total_goods, ship_fee, total_all = self._calculate_invoice_totals()
 
             customer_data = {
                 "full_name": self.order_name.text().strip(),
                 "phone": self.order_phone.text().strip(),
                 "address": self.order_address.text().strip(),
+                "email": self.order_email.text().strip(),
+                "tax_code": self.order_tax_code.text().strip(),
                 "note": "Tự động cập nhật từ lên đơn",
             }
             invoice_data = {
                 "invoice_no": invoice_no,
                 "created_at": created_at,
+                "goods_amount": total_goods,
+                "ship_fee": ship_fee,
                 "total_amount": total_all,
                 "paid_amount": 0,
                 "payment_date": created_at,
@@ -745,6 +783,8 @@ class MainWindow(QMainWindow):
             self.order_name.clear()
             self.order_phone.clear()
             self.order_address.clear()
+            self.order_email.clear()
+            self.order_tax_code.clear()
             self.search_product_edit.clear()
             self.search_product_list.clear()
             self.search_product_list.hide()
@@ -752,6 +792,7 @@ class MainWindow(QMainWindow):
             self.customer_suggestion_list.hide()
             self.selected_product_code = None
             self._selected_product_stock = 0
+            self.ship_fee_spin.setValue(0)
             self.order_price_spin.setValue(0)
             self.order_qty_spin.setValue(1)
             self._update_quantity_hint()
@@ -892,6 +933,8 @@ class MainWindow(QMainWindow):
             values = [
                 customer.get("full_name", ""),
                 customer.get("phone", ""),
+                customer.get("email", ""),
+                customer.get("tax_code", ""),
                 customer.get("address", ""),
                 customer.get("note", ""),
             ]
@@ -940,6 +983,29 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._sync_font_by_window_size()
+        self._sync_order_table_widths()
+
+    def _sync_order_table_widths(self) -> None:
+        header = getattr(self, "order_table", None)
+        if header is None:
+            return
+
+        viewport_width = self.order_table.viewport().width()
+        if viewport_width <= 0:
+            return
+
+        reserved_width = (
+            self.order_table.columnWidth(0)
+            + self.order_table.columnWidth(3)
+            + self.order_table.columnWidth(4)
+            + self.order_table.columnWidth(5)
+            + 32
+        )
+        flexible_width = max(360, viewport_width - reserved_width)
+        code_width = max(220, (flexible_width * 2) // 3)
+        name_width = max(160, flexible_width - code_width)
+        self.order_table.setColumnWidth(1, code_width)
+        self.order_table.setColumnWidth(2, name_width)
 
     def _sync_font_by_window_size(self) -> None:
         width_factor = self.width() / 72
@@ -952,3 +1018,9 @@ class MainWindow(QMainWindow):
         font = QFont("Times New Roman")
         font.setPixelSize(px)
         app.setFont(font)
+
+        highlight_font = QFont(font)
+        highlight_font.setPixelSize(px + 2)
+        for widget in [getattr(self, "total_goods_text_label", None), getattr(self, "total_goods_label", None)]:
+            if widget is not None:
+                widget.setFont(highlight_font)

@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     full_name TEXT NOT NULL,
     phone TEXT,
+    email TEXT,
+    tax_code TEXT,
     address TEXT,
     note TEXT
 );
@@ -27,6 +29,8 @@ CREATE TABLE IF NOT EXISTS invoices (
     created_at TEXT NOT NULL,
     customer_name TEXT NOT NULL,
     phone TEXT,
+    email TEXT,
+    tax_code TEXT,
     address TEXT,
     total_amount INTEGER NOT NULL
 );
@@ -68,8 +72,17 @@ EXPECTED_TABLE_COLUMNS = {
         "description",
         "note",
     ],
-    "customers": ["id", "full_name", "phone", "address", "note"],
-    "invoices": ["invoice_no", "created_at", "customer_name", "phone", "address", "total_amount"],
+    "customers": ["id", "full_name", "phone", "email", "tax_code", "address", "note"],
+    "invoices": [
+        "invoice_no",
+        "created_at",
+        "customer_name",
+        "phone",
+        "email",
+        "tax_code",
+        "address",
+        "total_amount",
+    ],
     "invoice_items": [
         "id",
         "invoice_no",

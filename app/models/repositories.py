@@ -127,12 +127,14 @@ class CustomerRepository:
                 conn.execute(
                     """
                     UPDATE customers
-                    SET full_name = ?, phone = ?, address = ?, note = ?
+                    SET full_name = ?, phone = ?, email = ?, tax_code = ?, address = ?, note = ?
                     WHERE id = ?
                     """,
                     (
                         payload["full_name"],
                         payload.get("phone", ""),
+                        payload.get("email", ""),
+                        payload.get("tax_code", ""),
                         payload.get("address", ""),
                         payload.get("note", ""),
                         exists["id"],
@@ -141,12 +143,14 @@ class CustomerRepository:
             else:
                 conn.execute(
                     """
-                    INSERT INTO customers (full_name, phone, address, note)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO customers (full_name, phone, email, tax_code, address, note)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
                         payload["full_name"],
                         payload.get("phone", ""),
+                        payload.get("email", ""),
+                        payload.get("tax_code", ""),
                         payload.get("address", ""),
                         payload.get("note", ""),
                     ),
@@ -156,7 +160,7 @@ class CustomerRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT full_name, phone, address, note
+                SELECT full_name, phone, email, tax_code, address, note
                 FROM customers
                 ORDER BY id DESC
                 LIMIT 200
@@ -169,13 +173,13 @@ class CustomerRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT full_name, phone, address, note
+                SELECT full_name, phone, email, tax_code, address, note
                 FROM customers
-                WHERE full_name LIKE ? OR phone LIKE ? OR address LIKE ?
+                WHERE full_name LIKE ? OR phone LIKE ? OR email LIKE ? OR tax_code LIKE ? OR address LIKE ?
                 ORDER BY id DESC
                 LIMIT 20
                 """,
-                (like_kw, like_kw, like_kw),
+                (like_kw, like_kw, like_kw, like_kw, like_kw),
             ).fetchall()
             return [dict(row) for row in rows]
 
@@ -186,14 +190,16 @@ class InvoiceRepository:
             conn.execute(
                 """
                 INSERT INTO invoices (
-                    invoice_no, created_at, customer_name, phone, address, total_amount
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    invoice_no, created_at, customer_name, phone, email, tax_code, address, total_amount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["invoice_no"],
                     payload["created_at"],
                     payload["customer_name"],
                     payload.get("phone", ""),
+                    payload.get("email", ""),
+                    payload.get("tax_code", ""),
                     payload.get("address", ""),
                     int(payload["total_amount"]),
                 ),
@@ -260,6 +266,8 @@ class InvoiceRepository:
                     invoices.created_at,
                     invoices.customer_name,
                     invoices.phone,
+                    invoices.email,
+                    invoices.tax_code,
                     invoices.address,
                     invoices.total_amount,
                     COUNT(invoice_items.id) AS item_count
@@ -270,6 +278,8 @@ class InvoiceRepository:
                     invoices.created_at,
                     invoices.customer_name,
                     invoices.phone,
+                    invoices.email,
+                    invoices.tax_code,
                     invoices.address,
                     invoices.total_amount
                 ORDER BY invoices.created_at DESC
@@ -282,7 +292,7 @@ class InvoiceRepository:
         with get_connection() as conn:
             invoice = conn.execute(
                 """
-                SELECT invoice_no, created_at, customer_name, phone, address, total_amount
+                SELECT invoice_no, created_at, customer_name, phone, email, tax_code, address, total_amount
                 FROM invoices
                 WHERE invoice_no = ?
                 """,

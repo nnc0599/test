@@ -48,6 +48,8 @@ class OrderController:
             "customer_name": customer_data["full_name"],
             "phone": customer_data.get("phone", ""),
             "address": customer_data.get("address", ""),
+            "email": customer_data.get("email", ""),
+            "tax_code": customer_data.get("tax_code", ""),
             "total_amount": int(invoice_data["total_amount"]),
             "paid_amount": int(invoice_data.get("paid_amount", 0)),
             "payment_date": invoice_data.get("payment_date", created_at),

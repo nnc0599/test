@@ -17,6 +17,8 @@ class Product:
 class Customer:
     full_name: str
     phone: str
+    email: str
+    tax_code: str
     address: str
     note: str
 
@@ -27,6 +29,8 @@ class Invoice:
     created_at: str
     customer_name: str
     phone: str
+    email: str
+    tax_code: str
     address: str
     total_amount: int
 
