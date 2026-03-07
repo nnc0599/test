@@ -350,7 +350,7 @@ class MainWindow(QMainWindow):
         actions = QHBoxLayout()
         self.btn_add_product = QPushButton("Thêm sản phẩm")
         self.btn_edit_product = QPushButton("Sửa thông tin")
-        self.btn_product_history = QPushButton("Lịch sử")
+        self.btn_product_history = QPushButton("Lịch sử sửa đổi")
         self.btn_delete_product = QPushButton("Xóa sản phẩm")
 
         self.btn_add_product.setStyleSheet(
