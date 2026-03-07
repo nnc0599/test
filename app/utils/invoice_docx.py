@@ -147,6 +147,30 @@ def _set_cell_text(cell, text: str, alignment=None, bold: bool | None = None, it
             _set_run_font(run, bold=bold, italic=italic)
 
 
+def _set_paragraph_segments(paragraph, segments: list[tuple[str, bool | None, bool | None]], alignment=None) -> None:
+    paragraph.clear()
+    if alignment is not None:
+        paragraph.alignment = alignment
+    for text, bold, italic in segments:
+        run = paragraph.add_run(text)
+        _set_run_font(run, bold=bold, italic=italic)
+
+
+def _set_cell_segments(cell, segments: list[tuple[str, bool | None, bool | None]], alignment=None) -> None:
+    if not cell.paragraphs:
+        paragraph = cell.add_paragraph()
+    else:
+        paragraph = cell.paragraphs[0]
+    paragraph.clear()
+    if alignment is not None:
+        paragraph.alignment = alignment
+    for extra_paragraph in cell.paragraphs[1:]:
+        _remove_paragraph(extra_paragraph)
+    for text, bold, italic in segments:
+        run = paragraph.add_run(text)
+        _set_run_font(run, bold=bold, italic=italic)
+
+
 def _remove_paragraph(paragraph) -> None:
     element = paragraph._element
     parent = element.getparent()
@@ -180,24 +204,24 @@ def _build_customer_info_table(doc: Document, invoice: dict):
         for index, width in enumerate(column_widths):
             row.cells[index].width = width
 
-    _set_cell_text(
+    _set_cell_segments(
         table.cell(0, 0),
-        f"Khách hàng: {invoice.get('customer_name', '').strip()}",
+        [("Khách hàng: ", True, None), (invoice.get('customer_name', '').strip(), None, None)],
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
-    _set_cell_text(
+    _set_cell_segments(
         table.cell(0, 1),
-        f"Điện thoại: {invoice.get('phone', '').strip()}",
+        [("Điện thoại: ", True, None), (invoice.get('phone', '').strip(), None, None)],
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
-    _set_cell_text(
+    _set_cell_segments(
         table.cell(1, 0),
-        f"Gmail: {invoice.get('email', '').strip()}",
+        [("Gmail: ", True, None), (invoice.get('email', '').strip(), None, None)],
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
-    _set_cell_text(
+    _set_cell_segments(
         table.cell(1, 1),
-        f"MST: {invoice.get('tax_code', '').strip()}",
+        [("Mã số thuế: ", True, None), (invoice.get('tax_code', '').strip(), None, None)],
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
 
@@ -535,7 +559,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict]) -> str:
                             <td class="meta-left">Ngày {created_at.day:02d} tháng {created_at.month:02d} năm {created_at.year}</td>
                         </tr>
                         <tr class="meta-invoice-row">
-                            <td class="meta-left">Số: {escape(str(invoice.get('invoice_no', '')))}</td>
+                            <td class="meta-left"><strong>Số:</strong> {escape(str(invoice.get('invoice_no', '')))}</td>
                         </tr>
                     </table>
 
@@ -546,7 +570,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict]) -> str:
                         </tr>
                         <tr>
                             <td class="info-left"><strong>Gmail:</strong> {escape(str(invoice.get('email', '')))}</td>
-                            <td class="info-right"><strong>MST:</strong> {escape(str(invoice.get('tax_code', '')))}</td>
+                            <td class="info-right"><strong>Mã số thuế:</strong> {escape(str(invoice.get('tax_code', '')))}</td>
                         </tr>
                         <tr>
                             <td class="info-address" colspan="2"><strong>Địa chỉ:</strong> {escape(str(invoice.get('address', '')))}</td>
@@ -631,11 +655,10 @@ def export_invoice_docx(invoice: dict, items: list[dict], output_dir: Path | Non
         f"Ngày {created_at.day:02d} tháng {created_at.month:02d} năm {created_at.year}",
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
-    _set_paragraph_text(
+    _set_paragraph_segments(
         invoice_paragraph,
-        f"Số: {invoice_no}",
+        [("Số: ", True, True), (invoice_no, None, True)],
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
-        italic=True,
     )
 
     customer_table = _build_customer_info_table(doc, invoice)
