@@ -292,9 +292,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(payment_box)
 
         export_location_box = QGroupBox("Nơi lưu file hóa đơn")
+        export_location_box.setMaximumHeight(76)
         export_location_layout = QHBoxLayout(export_location_box)
+        export_location_layout.setContentsMargins(10, 6, 10, 8)
+        export_location_layout.setSpacing(8)
         self.export_dir_label = QLabel(str(self.invoice_export_dir))
-        self.export_dir_label.setWordWrap(True)
+        self.export_dir_label.setWordWrap(False)
+        self.export_dir_label.setMinimumHeight(24)
         self.choose_export_dir_btn = QPushButton("Chọn nơi lưu file")
         self.choose_export_dir_btn.clicked.connect(self._choose_invoice_export_dir)
         export_location_layout.addWidget(self.export_dir_label, 1)
@@ -302,14 +306,19 @@ class MainWindow(QMainWindow):
         layout.addWidget(export_location_box)
 
         self.export_btn = QPushButton("XUẤT HÓA ĐƠN")
-        self.export_btn.setMinimumHeight(58)
+        self.export_btn.setMinimumHeight(48)
+        self.export_btn.setMaximumWidth(280)
         self.export_btn.setStyleSheet(
             "QPushButton { background: #0EA5E9; color: white; font-weight: 800; }"
             "QPushButton:hover { background: #0284C7; }"
             "QPushButton:pressed { background: #0369A1; }"
         )
         self.export_btn.clicked.connect(self._export_invoice)
-        layout.addWidget(self.export_btn)
+        export_btn_row = QHBoxLayout()
+        export_btn_row.addStretch()
+        export_btn_row.addWidget(self.export_btn)
+        export_btn_row.addStretch()
+        layout.addLayout(export_btn_row)
 
         self.search_product_edit.textChanged.connect(self._refresh_product_suggestions)
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
@@ -1196,3 +1205,8 @@ class MainWindow(QMainWindow):
         for widget in [getattr(self, "total_goods_text_label", None), getattr(self, "total_goods_label", None)]:
             if widget is not None:
                 widget.setFont(highlight_font)
+
+        export_font = QFont(font)
+        export_font.setPixelSize(px + 2)
+        if getattr(self, "export_btn", None) is not None:
+            self.export_btn.setFont(export_font)
