@@ -301,7 +301,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(export_location_box)
 
         self.export_btn = QPushButton("XUẤT HÓA ĐƠN")
-        self.export_btn.setMinimumHeight(58)
+        self.export_btn.setMinimumHeight(48)
         self.export_btn.setStyleSheet(
             "QPushButton { background: #0EA5E9; color: white; font-weight: 800; }"
             "QPushButton:hover { background: #0284C7; }"
@@ -1199,3 +1199,8 @@ class MainWindow(QMainWindow):
         export_font.setPixelSize(px + 2)
         if getattr(self, "export_btn", None) is not None:
             self.export_btn.setFont(export_font)
+
+        menu_font = QFont(font)
+        menu_font.setPixelSize(px + 3)
+        for button in self.menu_buttons:
+            button.setFont(menu_font)
