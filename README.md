@@ -68,6 +68,34 @@ pip install -r requirements.txt
 python run.py
 ```
 
+## Đọc dữ liệu từ database hiện tại
+
+Repo có sẵn script [scripts/read_current_database.py](scripts/read_current_database.py) để đọc dữ liệu trong database SQLite hiện tại của app và in ra JSON.
+
+1. Đọc toàn bộ bảng:
+
+```bash
+/workspaces/test/.venv/bin/python scripts/read_current_database.py
+```
+
+2. Chỉ đọc một bảng, ví dụ hóa đơn:
+
+```bash
+/workspaces/test/.venv/bin/python scripts/read_current_database.py --table invoices
+```
+
+3. Ghi dữ liệu ra file JSON:
+
+```bash
+/workspaces/test/.venv/bin/python scripts/read_current_database.py --output data/db_dump.json
+```
+
+4. Đọc nhiều bảng cùng lúc:
+
+```bash
+/workspaces/test/.venv/bin/python scripts/read_current_database.py --table invoices --table invoice_items --table customers
+```
+
 Tại màn hình `Sản phẩm`:
 
 - `Thêm sản phẩm`: mở form thêm mới, ngày cập nhật được gán tự động theo UTC+7.
