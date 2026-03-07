@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QStringListModel, Qt, QTimer
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
-    QCompleter,
     QFormLayout,
     QFrame,
     QGraphicsOpacityEffect,
@@ -16,6 +15,8 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -58,6 +59,7 @@ class MainWindow(QMainWindow):
         self.product_map: dict[str, dict[str, Any]] = {}
         self.invoice_lines: list[dict[str, Any]] = []
         self.selected_product_code: str | None = None
+        self._suspend_product_search = False
 
         self.setWindowTitle("Phần mềm bán hàng")
         self.resize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
@@ -191,11 +193,10 @@ class MainWindow(QMainWindow):
 
         self.search_product_edit = QLineEdit()
         self.search_product_edit.setPlaceholderText("Tìm kiếm sản phẩm")
-        self.completer_model = QStringListModel([])
-        self.product_completer = QCompleter(self.completer_model)
-        self.product_completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.product_completer.setFilterMode(Qt.MatchContains)
-        self.search_product_edit.setCompleter(self.product_completer)
+        self.search_product_list = QListWidget()
+        self.search_product_list.setAlternatingRowColors(True)
+        self.search_product_list.setMaximumHeight(180)
+        self.search_product_list.hide()
 
         self.view_desc_btn = QPushButton("Xem thêm")
         self.view_desc_btn.clicked.connect(self._show_selected_product_desc)
@@ -221,6 +222,7 @@ class MainWindow(QMainWindow):
         add_grid.addWidget(QLabel("Đơn giá"), 0, 7)
         add_grid.addWidget(self.order_price_spin, 0, 8)
         add_grid.addWidget(self.add_line_btn, 0, 9)
+        add_grid.addWidget(self.search_product_list, 1, 1, 1, 4)
 
         layout.addWidget(add_item_box)
 
@@ -261,9 +263,9 @@ class MainWindow(QMainWindow):
         self.export_btn.clicked.connect(self._export_invoice)
         layout.addWidget(self.export_btn)
 
-        self.search_product_edit.textChanged.connect(self._refresh_product_completer)
-        self.product_completer.activated.connect(self._on_completer_activated)
+        self.search_product_edit.textChanged.connect(self._refresh_product_suggestions)
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
+        self.search_product_list.itemClicked.connect(self._on_product_suggestion_clicked)
 
         return page
 
@@ -471,29 +473,45 @@ class MainWindow(QMainWindow):
         anim.start()
         self._last_anim = anim
 
-    def _refresh_product_completer(self, keyword: str) -> None:
+    def _refresh_product_suggestions(self, keyword: str) -> None:
+        if self._suspend_product_search:
+            return
+
         products = self.order_controller.search_products(keyword)
         self.product_map = {item["product_code"]: item for item in products}
-        labels = [
-            f"{item['product_code']} | {item['name']} | {item.get('description', '')[:70]}"
-            for item in products
-        ]
-        self.completer_model.setStringList(labels)
+        self.search_product_list.clear()
 
-    def _on_completer_activated(self, label: str) -> None:
-        product_code = label.split("|")[0].strip()
-        self._set_selected_product(product_code)
+        if not products:
+            self.search_product_list.hide()
+            return
+
+        for item in products:
+            label = f"{item['product_code']} | {item['name']} | Tồn: {item['quantity']} | Giá: {format_money(item['sale_price'])}"
+            widget_item = QListWidgetItem(label)
+            widget_item.setData(Qt.UserRole, item["product_code"])
+            self.search_product_list.addItem(widget_item)
+
+        self.search_product_list.setCurrentRow(0)
+        self.search_product_list.setVisible(bool(keyword.strip()))
+
+    def _on_product_suggestion_clicked(self, item: QListWidgetItem) -> None:
+        product_code = item.data(Qt.UserRole)
+        if product_code:
+            self._set_selected_product(str(product_code))
 
     def _set_selected_product(self, product_code: str) -> None:
         product = self.product_map.get(product_code)
         if not product:
             return
         self.selected_product_code = product_code
+        self._suspend_product_search = True
         self.search_product_edit.setText(f"{product['product_code']} | {product['name']}")
+        self._suspend_product_search = False
+        self.search_product_list.hide()
         self.order_price_spin.setValue(int(product["sale_price"]))
         stock = int(product["quantity"])
         self.order_qty_spin.setMaximum(max(stock, 1))
-        self.order_qty_spin.setToolTip(f"So luong ton: {stock}")
+        self.order_qty_spin.setToolTip(f"Số lượng tồn: {stock}")
 
     def _pick_product_from_input(self) -> bool:
         raw_text = self.search_product_edit.text().strip()
@@ -523,8 +541,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Cần chọn rõ hơn",
-                "Có nhiều sản phẩm phù hợp. Hãy chọn trong gợi ý hoặc nhập đầy đủ mã sản phẩm.",
+                "Có nhiều sản phẩm phù hợp. Hãy click chọn trong danh sách gợi ý phía dưới.",
             )
+            self._refresh_product_suggestions(raw_text)
             return False
 
         QMessageBox.warning(self, "Không tìm thấy", "Không tìm thấy sản phẩm phù hợp")
@@ -619,6 +638,8 @@ class MainWindow(QMainWindow):
             self.order_phone.clear()
             self.order_address.clear()
             self.search_product_edit.clear()
+            self.search_product_list.clear()
+            self.search_product_list.hide()
             self.selected_product_code = None
             self.order_price_spin.setValue(0)
             self.order_qty_spin.setValue(1)
