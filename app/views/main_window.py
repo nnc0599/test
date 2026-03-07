@@ -626,7 +626,7 @@ class MainWindow(QMainWindow):
             return
 
         for item in products:
-            label = f"{item['product_code']} | {item['name']} | Giá: {format_money(item['sale_price'])}"
+            label = f"{item['product_code']} | {item['name']}"
             widget_item = QListWidgetItem(label)
             widget_item.setData(Qt.UserRole, item["product_code"])
             self.search_product_list.addItem(widget_item)
