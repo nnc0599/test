@@ -236,9 +236,6 @@ class MainWindow(QMainWindow):
 
         self.order_qty_spin = QSpinBox()
         self.order_qty_spin.setRange(1, 1_000_000_000)
-        self.order_qty_hint = QLabel("Tồn hiện tại: chưa chọn sản phẩm")
-        self.order_qty_hint.setStyleSheet("color: #475569; font-style: italic;")
-
         self.order_price_spin = QSpinBox()
         self.order_price_spin.setRange(0, 2_000_000_000)
 
@@ -254,7 +251,6 @@ class MainWindow(QMainWindow):
         add_grid.addWidget(self.order_price_spin, 0, 7)
         add_grid.addWidget(self.add_line_btn, 0, 8)
         add_grid.addWidget(self.search_product_list, 1, 1, 1, 3)
-        add_grid.addWidget(self.order_qty_hint, 1, 4, 1, 5)
 
         layout.addWidget(add_item_box)
 
@@ -292,13 +288,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(payment_box)
 
         export_location_box = QGroupBox("Nơi lưu file hóa đơn")
-        export_location_box.setMaximumHeight(76)
+        export_location_box.setMaximumHeight(64)
         export_location_layout = QHBoxLayout(export_location_box)
-        export_location_layout.setContentsMargins(10, 6, 10, 8)
+        export_location_layout.setContentsMargins(10, 4, 10, 6)
         export_location_layout.setSpacing(8)
         self.export_dir_label = QLabel(str(self.invoice_export_dir))
         self.export_dir_label.setWordWrap(False)
-        self.export_dir_label.setMinimumHeight(24)
+        self.export_dir_label.setMinimumHeight(20)
         self.choose_export_dir_btn = QPushButton("Chọn nơi lưu file")
         self.choose_export_dir_btn.clicked.connect(self._choose_invoice_export_dir)
         export_location_layout.addWidget(self.export_dir_label, 1)
@@ -323,7 +319,6 @@ class MainWindow(QMainWindow):
         self.search_product_edit.textChanged.connect(self._refresh_product_suggestions)
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
         self.search_product_list.itemClicked.connect(self._on_product_suggestion_clicked)
-        self.order_qty_spin.valueChanged.connect(self._update_quantity_hint)
         self.ship_fee_spin.valueChanged.connect(self._update_invoice_totals)
         self.order_name.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.order_phone.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
@@ -622,8 +617,6 @@ class MainWindow(QMainWindow):
 
         self.selected_product_code = None
         self._selected_product_stock = 0
-        self._update_quantity_hint()
-
         products = self.order_controller.search_products(keyword)
         self.product_map = {item["product_code"]: item for item in products}
         self.search_product_list.clear()
@@ -633,7 +626,7 @@ class MainWindow(QMainWindow):
             return
 
         for item in products:
-            label = f"{item['product_code']} | {item['name']} | Tồn: {item['quantity']} | Giá: {format_money(item['sale_price'])}"
+            label = f"{item['product_code']} | {item['name']} | Giá: {format_money(item['sale_price'])}"
             widget_item = QListWidgetItem(label)
             widget_item.setData(Qt.UserRole, item["product_code"])
             self.search_product_list.addItem(widget_item)
@@ -659,26 +652,7 @@ class MainWindow(QMainWindow):
         self.order_price_spin.setValue(int(product["sale_price"]))
         stock = self._selected_product_stock
         self.order_qty_spin.setMaximum(max(stock, 1))
-        self.order_qty_spin.setToolTip(f"Số lượng tồn: {stock}")
-        self._update_quantity_hint()
-
-    def _update_quantity_hint(self) -> None:
-        if not self.selected_product_code:
-            self.order_qty_hint.setText("Tồn hiện tại: chưa chọn sản phẩm")
-            self.order_qty_hint.setStyleSheet("color: #475569; font-style: italic;")
-            return
-
-        remaining = self._selected_product_stock - self.order_qty_spin.value()
-        if remaining >= 0:
-            self.order_qty_hint.setText(
-                f"Tồn hiện tại: {self._selected_product_stock} | Còn lại sau khi thêm: {remaining}"
-            )
-            self.order_qty_hint.setStyleSheet("color: #475569; font-style: italic;")
-        else:
-            self.order_qty_hint.setText(
-                f"Tồn hiện tại: {self._selected_product_stock} | Vượt tồn: {abs(remaining)}"
-            )
-            self.order_qty_hint.setStyleSheet("color: #B91C1C; font-style: italic;")
+        self.order_qty_spin.setToolTip("")
 
     def _refresh_customer_suggestions_from_inputs(self) -> None:
         if self._suspend_customer_search:
@@ -914,7 +888,6 @@ class MainWindow(QMainWindow):
             self.ship_fee_spin.setValue(0)
             self.order_price_spin.setValue(0)
             self.order_qty_spin.setValue(1)
-            self._update_quantity_hint()
             self.refresh_products()
             self.refresh_report()
         except Exception as exc:  # pragma: no cover - dialog feedback
@@ -1210,3 +1183,8 @@ class MainWindow(QMainWindow):
         export_font.setPixelSize(px + 2)
         if getattr(self, "export_btn", None) is not None:
             self.export_btn.setFont(export_font)
+
+        menu_font = QFont(font)
+        menu_font.setPixelSize(px + 3)
+        for button in self.menu_buttons:
+            button.setFont(menu_font)
