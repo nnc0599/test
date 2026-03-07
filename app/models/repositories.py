@@ -11,7 +11,7 @@ class ProductRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, unit, quantity, sale_price, updated_at, description, note
                 FROM products
                 ORDER BY updated_at DESC
                 """
@@ -22,7 +22,7 @@ class ProductRepository:
         with get_connection() as conn:
             row = conn.execute(
                 """
-                SELECT product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, unit, quantity, sale_price, updated_at, description, note
                 FROM products
                 WHERE product_code = ?
                 """,
@@ -35,13 +35,12 @@ class ProductRepository:
             conn.execute(
                 """
                 INSERT INTO products (
-                    product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    product_code, name, unit, quantity, sale_price, updated_at, description, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["product_code"],
                     payload["name"],
-                    payload.get("warranty", ""),
                     payload.get("unit", ""),
                     int(payload.get("quantity", 0)),
                     int(payload.get("sale_price", 0)),
@@ -58,7 +57,6 @@ class ProductRepository:
                 UPDATE products
                 SET
                     name = ?,
-                    warranty = ?,
                     unit = ?,
                     quantity = ?,
                     sale_price = ?,
@@ -69,7 +67,6 @@ class ProductRepository:
                 """,
                 (
                     payload["name"],
-                    payload.get("warranty", ""),
                     payload.get("unit", ""),
                     int(payload.get("quantity", 0)),
                     int(payload.get("sale_price", 0)),
@@ -89,7 +86,7 @@ class ProductRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, unit, quantity, sale_price, updated_at, description, note
                 FROM products
                 WHERE product_code LIKE ? OR name LIKE ? OR description LIKE ?
                 ORDER BY name ASC
@@ -119,41 +116,53 @@ class ProductRepository:
 class CustomerRepository:
     def upsert_customer(self, payload: dict) -> None:
         with get_connection() as conn:
-            exists = conn.execute(
-                "SELECT customer_code FROM customers WHERE customer_code = ?",
-                (payload["customer_code"],),
-            ).fetchone()
+            phone = payload.get("phone", "").strip()
+            exists = None
+            if phone:
+                exists = conn.execute(
+                    "SELECT id FROM customers WHERE phone = ?",
+                    (phone,),
+                ).fetchone()
             if exists:
                 conn.execute(
                     """
                     UPDATE customers
-                    SET full_name = ?, phone = ?, address = ?, tax_code = ?, note = ?
-                    WHERE customer_code = ?
+                    SET full_name = ?, phone = ?, address = ?, note = ?
+                    WHERE id = ?
                     """,
                     (
                         payload["full_name"],
                         payload.get("phone", ""),
                         payload.get("address", ""),
-                        payload.get("tax_code", ""),
                         payload.get("note", ""),
-                        payload["customer_code"],
+                        exists["id"],
                     ),
                 )
             else:
                 conn.execute(
                     """
-                    INSERT INTO customers (customer_code, full_name, phone, address, tax_code, note)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO customers (full_name, phone, address, note)
+                    VALUES (?, ?, ?, ?)
                     """,
                     (
-                        payload["customer_code"],
                         payload["full_name"],
                         payload.get("phone", ""),
                         payload.get("address", ""),
-                        payload.get("tax_code", ""),
                         payload.get("note", ""),
                     ),
                 )
+
+    def list_customers(self) -> list[dict]:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT full_name, phone, address, note
+                FROM customers
+                ORDER BY id DESC
+                LIMIT 200
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
 
 
 class InvoiceRepository:
@@ -162,18 +171,16 @@ class InvoiceRepository:
             conn.execute(
                 """
                 INSERT INTO invoices (
-                    invoice_no, created_at, customer_code, customer_name, phone, address, total_amount, ship_fee
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    invoice_no, created_at, customer_name, phone, address, total_amount
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["invoice_no"],
                     payload["created_at"],
-                    payload.get("customer_code", ""),
                     payload["customer_name"],
                     payload.get("phone", ""),
                     payload.get("address", ""),
                     int(payload["total_amount"]),
-                    int(payload.get("ship_fee", 0)),
                 ),
             )
 
@@ -215,12 +222,12 @@ class InvoiceRepository:
             conn.execute(
                 """
                 INSERT INTO payments (
-                    customer_name, customer_code, purchase_date, payment_date, total_amount, paid_amount, remaining_amount
+                    invoice_no, customer_name, purchase_date, payment_date, total_amount, paid_amount, remaining_amount
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    payload["invoice_no"],
                     payload["customer_name"],
-                    payload.get("customer_code", ""),
                     payload["created_at"],
                     payload.get("payment_date", payload["created_at"]),
                     total,
@@ -228,6 +235,60 @@ class InvoiceRepository:
                     total - paid_amount,
                 ),
             )
+
+    def list_invoices(self) -> list[dict]:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    invoices.invoice_no,
+                    invoices.created_at,
+                    invoices.customer_name,
+                    invoices.phone,
+                    invoices.address,
+                    invoices.total_amount,
+                    COUNT(invoice_items.id) AS item_count
+                FROM invoices
+                LEFT JOIN invoice_items ON invoice_items.invoice_no = invoices.invoice_no
+                GROUP BY
+                    invoices.invoice_no,
+                    invoices.created_at,
+                    invoices.customer_name,
+                    invoices.phone,
+                    invoices.address,
+                    invoices.total_amount
+                ORDER BY invoices.created_at DESC
+                LIMIT 200
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_invoice_detail(self, invoice_no: str) -> dict | None:
+        with get_connection() as conn:
+            invoice = conn.execute(
+                """
+                SELECT invoice_no, created_at, customer_name, phone, address, total_amount
+                FROM invoices
+                WHERE invoice_no = ?
+                """,
+                (invoice_no,),
+            ).fetchone()
+            if not invoice:
+                return None
+
+            items = conn.execute(
+                """
+                SELECT product_code, product_name, quantity, unit_price, line_total
+                FROM invoice_items
+                WHERE invoice_no = ?
+                ORDER BY id ASC
+                """,
+                (invoice_no,),
+            ).fetchall()
+            return {
+                "invoice": dict(invoice),
+                "items": [dict(row) for row in items],
+            }
 
 
 class ReportRepository:

@@ -6,7 +6,6 @@ SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS products (
     product_code TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    warranty TEXT,
     unit TEXT,
     quantity INTEGER NOT NULL DEFAULT 0,
     sale_price INTEGER NOT NULL DEFAULT 0,
@@ -16,24 +15,20 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 CREATE TABLE IF NOT EXISTS customers (
-    customer_code TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     full_name TEXT NOT NULL,
     phone TEXT,
     address TEXT,
-    tax_code TEXT,
     note TEXT
 );
 
 CREATE TABLE IF NOT EXISTS invoices (
     invoice_no TEXT PRIMARY KEY,
     created_at TEXT NOT NULL,
-    customer_code TEXT,
     customer_name TEXT NOT NULL,
     phone TEXT,
     address TEXT,
-    total_amount INTEGER NOT NULL,
-    ship_fee INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (customer_code) REFERENCES customers(customer_code)
+    total_amount INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS invoice_items (
@@ -50,20 +45,76 @@ CREATE TABLE IF NOT EXISTS invoice_items (
 
 CREATE TABLE IF NOT EXISTS payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_no TEXT,
     customer_name TEXT NOT NULL,
-    customer_code TEXT,
     purchase_date TEXT NOT NULL,
     payment_date TEXT,
     total_amount INTEGER NOT NULL,
     paid_amount INTEGER NOT NULL,
     remaining_amount INTEGER NOT NULL,
-    FOREIGN KEY (customer_code) REFERENCES customers(customer_code)
+    FOREIGN KEY (invoice_no) REFERENCES invoices(invoice_no) ON DELETE CASCADE
 );
 """
 
 
+EXPECTED_TABLE_COLUMNS = {
+    "products": [
+        "product_code",
+        "name",
+        "unit",
+        "quantity",
+        "sale_price",
+        "updated_at",
+        "description",
+        "note",
+    ],
+    "customers": ["id", "full_name", "phone", "address", "note"],
+    "invoices": ["invoice_no", "created_at", "customer_name", "phone", "address", "total_amount"],
+    "invoice_items": [
+        "id",
+        "invoice_no",
+        "product_code",
+        "product_name",
+        "quantity",
+        "unit_price",
+        "line_total",
+    ],
+    "payments": [
+        "id",
+        "invoice_no",
+        "customer_name",
+        "purchase_date",
+        "payment_date",
+        "total_amount",
+        "paid_amount",
+        "remaining_amount",
+    ],
+}
+
+
+def _table_columns(conn, table_name: str) -> list[str]:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return [row[1] for row in rows]
+
+
+def _schema_matches(conn) -> bool:
+    for table_name, expected_columns in EXPECTED_TABLE_COLUMNS.items():
+        if _table_columns(conn, table_name) != expected_columns:
+            return False
+    return True
+
+
 def init_schema() -> None:
     with get_connection() as conn:
+        has_products = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'products'"
+        ).fetchone()
+        if has_products and not _schema_matches(conn):
+            conn.execute("DROP TABLE IF EXISTS payments")
+            conn.execute("DROP TABLE IF EXISTS invoice_items")
+            conn.execute("DROP TABLE IF EXISTS invoices")
+            conn.execute("DROP TABLE IF EXISTS customers")
+            conn.execute("DROP TABLE IF EXISTS products")
         conn.executescript(SCHEMA_SQL)
 
 
@@ -76,14 +127,13 @@ def seed_sample_products() -> None:
         conn.executemany(
             """
             INSERT INTO products (
-                product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                product_code, name, unit, quantity, sale_price, updated_at, description, note
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     "SP001",
                     "Pin Nang Luong 550W",
-                    "12 thang",
                     "tam",
                     200,
                     3500000,
@@ -94,7 +144,6 @@ def seed_sample_products() -> None:
                 (
                     "SP002",
                     "Bien Tan Hybrid 5kW",
-                    "24 thang",
                     "bo",
                     45,
                     9800000,

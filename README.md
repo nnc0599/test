@@ -1,6 +1,6 @@
 # Sales Desktop App (PySide6 + SQLite)
 
-Ung dung ban hang desktop viet bang Python + PySide6, theo mo hinh MVC.
+Ung dung ban hang desktop viet bang Python + PySide6, theo mo hinh MVC, su dung SQLite lam co so du lieu.
 
 ## Tinh nang chinh
 
@@ -9,7 +9,7 @@ Ung dung ban hang desktop viet bang Python + PySide6, theo mo hinh MVC.
 	- Khach hang
 	- Hoa don ban hang + danh sach hang hoa
 	- Thanh toan
-- Giao dien QT 1080x720 (co gian), font `Times New Roman`, chu toi thieu 15px.
+- Giao dien QT 1920x1080 (co gian), font `Times New Roman`, chu toi thieu 15px va tu dong phong to/thu nho theo kich thuoc cua cua so.
 - 3 muc lon chia deu theo chieu ngang:
 	- `Len don hang`
 	- `San pham`
@@ -18,7 +18,11 @@ Ung dung ban hang desktop viet bang Python + PySide6, theo mo hinh MVC.
 - Dialog Them/Sua/Xoa san pham co xac thuc mat khau (`12345678`).
 - Quy tac bat buoc ghi chu khi sua san pham (khong ghi chu thi khong bam duoc `OK`).
 - Tab Bao cao doanh thu theo ngay/thang.
+- Tab Bao cao bo sung bang khach hang da luu va danh sach hoa don, co nut xem chi tiet tung hoa don.
 - Mui gio su dung UTC+7.
+- Database san pham gom: ma san pham, ten san pham, don vi tinh, so luong, gia ban, ngay cap nhat, mo ta chi tiet, ghi chu.
+- Database khach hang gom: ho ten, so dien thoai, dia chi, ghi chu.
+- Database hoa don gom: so hoa don, ngay tao, ten khach hang, so dien thoai, dia chi, tong so tien.
 
 ## Cau truc thu muc
 
@@ -64,6 +68,12 @@ pip install -r requirements.txt
 ```bash
 python run.py
 ```
+
+Tai man hinh `San pham`:
+
+- `Them san pham`: mo form them moi, ngay cap nhat duoc gan tu dong theo UTC+7.
+- `Sua thong tin`: chi bat khi da chon san pham; bat buoc nhap `Ghi chu`, neu de trong thi nut `OK` bi vo hieu hoa.
+- `Xoa san pham`: can chon san pham, xac nhan xoa va nhap lai mat khau them mot lan nua.
 
 ## Chay GUI trong Codespaces
 

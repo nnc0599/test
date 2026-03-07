@@ -5,7 +5,6 @@ from dataclasses import dataclass
 class Product:
     product_code: str
     name: str
-    warranty: str
     unit: str
     quantity: int
     sale_price: int
@@ -16,12 +15,20 @@ class Product:
 
 @dataclass
 class Customer:
-    customer_code: str
     full_name: str
     phone: str
     address: str
-    tax_code: str
     note: str
+
+
+@dataclass
+class Invoice:
+    invoice_no: str
+    created_at: str
+    customer_name: str
+    phone: str
+    address: str
+    total_amount: int
 
 
 @dataclass

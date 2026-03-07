@@ -35,6 +35,7 @@ from app.controllers.report_controller import ReportController
 from app.utils.time_utils import now_iso_utc7
 from app.views.dialogs.auth_dialog import PasswordDialog
 from app.views.dialogs.description_dialog import DescriptionDialog
+from app.views.dialogs.invoice_detail_dialog import InvoiceDetailDialog
 from app.views.dialogs.product_dialog import ProductFormDialog
 
 
@@ -172,8 +173,6 @@ class MainWindow(QMainWindow):
         self.order_created_at.setReadOnly(True)
 
         self.order_address = QLineEdit()
-        self.order_tax_code = QLineEdit()
-        self.order_customer_code = QLineEdit()
 
         customer_grid.addWidget(QLabel("Nhap ho ten"), 0, 0)
         customer_grid.addWidget(self.order_name, 0, 1)
@@ -183,12 +182,7 @@ class MainWindow(QMainWindow):
         customer_grid.addWidget(self.order_created_at, 0, 5)
 
         customer_grid.addWidget(QLabel("Dia chi"), 1, 0)
-        customer_grid.addWidget(self.order_address, 1, 1, 1, 3)
-        customer_grid.addWidget(QLabel("Ma so thue"), 1, 4)
-        customer_grid.addWidget(self.order_tax_code, 1, 5)
-
-        customer_grid.addWidget(QLabel("Ma khach hang"), 2, 0)
-        customer_grid.addWidget(self.order_customer_code, 2, 1)
+        customer_grid.addWidget(self.order_address, 1, 1, 1, 5)
 
         layout.addWidget(customer_box)
 
@@ -242,19 +236,14 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         layout.addWidget(self.order_table)
 
-        payment_box = QGroupBox("Thanh toan")
+        payment_box = QGroupBox("Tong tien hoa don")
         payment_form = QFormLayout(payment_box)
-
-        self.ship_fee_spin = QSpinBox()
-        self.ship_fee_spin.setRange(0, 2_000_000_000)
-        self.ship_fee_spin.valueChanged.connect(self._update_invoice_totals)
 
         self.total_goods_label = QLabel("0")
         self.total_all_label = QLabel("0")
 
-        payment_form.addRow("Phi ship", self.ship_fee_spin)
-        payment_form.addRow("Tong hang", self.total_goods_label)
-        payment_form.addRow("Tong cong", self.total_all_label)
+        payment_form.addRow("Tien hang", self.total_goods_label)
+        payment_form.addRow("Tong so tien", self.total_all_label)
 
         layout.addWidget(payment_box)
 
@@ -376,6 +365,51 @@ class MainWindow(QMainWindow):
         refresh_btn = QPushButton("Lam moi bao cao")
         refresh_btn.clicked.connect(self.refresh_report)
         layout.addWidget(refresh_btn)
+
+        management_panel = QHBoxLayout()
+
+        customer_group = QGroupBox("Khach hang da luu")
+        customer_layout = QVBoxLayout(customer_group)
+        self.customer_table = QTableWidget(0, 4)
+        self.customer_table.setHorizontalHeaderLabels(["Ho ten", "So dien thoai", "Dia chi", "Ghi chu"])
+        self.customer_table.verticalHeader().setVisible(False)
+        self.customer_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.customer_table.setSelectionBehavior(QTableWidget.SelectRows)
+        customer_header = self.customer_table.horizontalHeader()
+        customer_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        customer_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        customer_header.setSectionResizeMode(2, QHeaderView.Stretch)
+        customer_header.setSectionResizeMode(3, QHeaderView.Stretch)
+        customer_layout.addWidget(self.customer_table)
+
+        invoice_group = QGroupBox("Danh sach hoa don")
+        invoice_layout = QVBoxLayout(invoice_group)
+        self.invoice_table = QTableWidget(0, 7)
+        self.invoice_table.setHorizontalHeaderLabels(
+            ["So hoa don", "Ngay tao", "Khach hang", "So dien thoai", "Dia chi", "Tong tien", "So dong"]
+        )
+        self.invoice_table.verticalHeader().setVisible(False)
+        self.invoice_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.invoice_table.setSelectionBehavior(QTableWidget.SelectRows)
+        invoice_header = self.invoice_table.horizontalHeader()
+        invoice_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(4, QHeaderView.Stretch)
+        invoice_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        invoice_layout.addWidget(self.invoice_table)
+
+        self.view_invoice_detail_btn = QPushButton("Xem chi tiet hoa don")
+        self.view_invoice_detail_btn.setEnabled(False)
+        self.view_invoice_detail_btn.clicked.connect(self._show_selected_invoice_detail)
+        self.invoice_table.itemSelectionChanged.connect(self._sync_invoice_action_state)
+        invoice_layout.addWidget(self.view_invoice_detail_btn)
+
+        management_panel.addWidget(customer_group)
+        management_panel.addWidget(invoice_group)
+        layout.addLayout(management_panel)
 
         return page
 
@@ -513,8 +547,7 @@ class MainWindow(QMainWindow):
 
     def _update_invoice_totals(self) -> None:
         total_goods = sum(int(line["line_total"]) for line in self.invoice_lines)
-        ship = self.ship_fee_spin.value()
-        total_all = total_goods + ship
+        total_all = total_goods
         self.total_goods_label.setText(format_money(total_goods))
         self.total_all_label.setText(format_money(total_all))
 
@@ -523,20 +556,17 @@ class MainWindow(QMainWindow):
             created_at = self.order_created_at.text().strip() or now_iso_utc7()
             invoice_no = f"HD{created_at.replace('-', '').replace(':', '').replace(' ', '')}"
             total_goods = sum(int(line["line_total"]) for line in self.invoice_lines)
-            total_all = total_goods + self.ship_fee_spin.value()
+            total_all = total_goods
 
             customer_data = {
-                "customer_code": self.order_customer_code.text().strip(),
                 "full_name": self.order_name.text().strip(),
                 "phone": self.order_phone.text().strip(),
                 "address": self.order_address.text().strip(),
-                "tax_code": self.order_tax_code.text().strip(),
                 "note": "Tu dong cap nhat tu len don",
             }
             invoice_data = {
                 "invoice_no": invoice_no,
                 "created_at": created_at,
-                "ship_fee": self.ship_fee_spin.value(),
                 "total_amount": total_all,
                 "paid_amount": 0,
                 "payment_date": created_at,
@@ -547,6 +577,11 @@ class MainWindow(QMainWindow):
             self.invoice_lines.clear()
             self._render_invoice_lines()
             self._update_invoice_totals()
+            self.order_name.clear()
+            self.order_phone.clear()
+            self.order_address.clear()
+            self.search_product_edit.clear()
+            self.selected_product_code = None
             self.refresh_products()
             self.refresh_report()
         except Exception as exc:  # pragma: no cover - dialog feedback
@@ -677,6 +712,57 @@ class MainWindow(QMainWindow):
         for row, item in enumerate(by_month):
             self.month_table.setItem(row, 0, QTableWidgetItem(item["month"]))
             self.month_table.setItem(row, 1, QTableWidgetItem(format_money(item["total"])))
+
+        customers = self.order_controller.list_customers()
+        self.customer_table.setRowCount(len(customers))
+        for row, customer in enumerate(customers):
+            values = [
+                customer.get("full_name", ""),
+                customer.get("phone", ""),
+                customer.get("address", ""),
+                customer.get("note", ""),
+            ]
+            for col, value in enumerate(values):
+                self.customer_table.setItem(row, col, QTableWidgetItem(value))
+
+        invoices = self.order_controller.list_invoices()
+        self.invoice_table.setRowCount(len(invoices))
+        for row, invoice in enumerate(invoices):
+            values = [
+                invoice["invoice_no"],
+                invoice["created_at"],
+                invoice["customer_name"],
+                invoice.get("phone", ""),
+                invoice.get("address", ""),
+                format_money(invoice["total_amount"]),
+                str(invoice["item_count"]),
+            ]
+            for col, value in enumerate(values):
+                self.invoice_table.setItem(row, col, QTableWidgetItem(value))
+
+        self._sync_invoice_action_state()
+
+    def _selected_invoice_no(self) -> str | None:
+        selected = self.invoice_table.selectedItems()
+        if not selected:
+            return None
+        row = selected[0].row()
+        invoice_item = self.invoice_table.item(row, 0)
+        return invoice_item.text() if invoice_item else None
+
+    def _sync_invoice_action_state(self) -> None:
+        self.view_invoice_detail_btn.setEnabled(self._selected_invoice_no() is not None)
+
+    def _show_selected_invoice_detail(self) -> None:
+        invoice_no = self._selected_invoice_no()
+        if not invoice_no:
+            return
+        detail = self.order_controller.get_invoice_detail(invoice_no)
+        if not detail:
+            QMessageBox.warning(self, "Khong tim thay", "Khong lay duoc chi tiet hoa don")
+            return
+        dialog = InvoiceDetailDialog(detail, self)
+        dialog.exec()
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)

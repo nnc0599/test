@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.utils.time_utils import now_iso_utc7
+
 
 class ProductFormDialog(QDialog):
     def __init__(self, parent=None, mode: str = "add", initial: dict | None = None):
@@ -28,8 +30,8 @@ class ProductFormDialog(QDialog):
 
         self.code_edit = QLineEdit()
         self.name_edit = QLineEdit()
-        self.warranty_edit = QLineEdit()
         self.unit_edit = QLineEdit()
+        self.updated_at_value = QLabel("Tu dong lay thoi gian hien tai")
 
         self.quantity_spin = QSpinBox()
         self.quantity_spin.setRange(0, 1_000_000_000)
@@ -51,15 +53,15 @@ class ProductFormDialog(QDialog):
         top_grid.addWidget(QLabel("Ten san pham"), 0, 2)
         top_grid.addWidget(self.name_edit, 0, 3)
 
-        top_grid.addWidget(QLabel("Bao hanh"), 1, 0)
-        top_grid.addWidget(self.warranty_edit, 1, 1)
-        top_grid.addWidget(QLabel("Don vi tinh"), 1, 2)
-        top_grid.addWidget(self.unit_edit, 1, 3)
+        top_grid.addWidget(QLabel("Don vi tinh"), 1, 0)
+        top_grid.addWidget(self.unit_edit, 1, 1)
+        top_grid.addWidget(QLabel("So luong"), 1, 2)
+        top_grid.addWidget(self.quantity_spin, 1, 3)
 
-        top_grid.addWidget(QLabel("So luong"), 2, 0)
-        top_grid.addWidget(self.quantity_spin, 2, 1)
-        top_grid.addWidget(QLabel("Gia ban"), 2, 2)
-        top_grid.addWidget(self.price_spin, 2, 3)
+        top_grid.addWidget(QLabel("Gia ban"), 2, 0)
+        top_grid.addWidget(self.price_spin, 2, 1)
+        top_grid.addWidget(QLabel("Ngay cap nhat"), 2, 2)
+        top_grid.addWidget(self.updated_at_value, 2, 3)
 
         product_box = QGroupBox("Thong tin san pham")
         product_box.setLayout(top_grid)
@@ -96,12 +98,12 @@ class ProductFormDialog(QDialog):
     def _bind_data(self) -> None:
         self.code_edit.setText(self.initial.get("product_code", ""))
         self.name_edit.setText(self.initial.get("name", ""))
-        self.warranty_edit.setText(self.initial.get("warranty", ""))
         self.unit_edit.setText(self.initial.get("unit", ""))
         self.quantity_spin.setValue(int(self.initial.get("quantity", 0)))
         self.price_spin.setValue(int(self.initial.get("sale_price", 0)))
         self.description_edit.setPlainText(self.initial.get("description", ""))
         self.note_edit.setPlainText(self.initial.get("note", ""))
+        self.updated_at_value.setText(self.initial.get("updated_at", now_iso_utc7()))
 
         if self.mode == "edit":
             self.code_edit.setReadOnly(True)
@@ -133,7 +135,6 @@ class ProductFormDialog(QDialog):
         return {
             "product_code": self.code_edit.text().strip(),
             "name": self.name_edit.text().strip(),
-            "warranty": self.warranty_edit.text().strip(),
             "unit": self.unit_edit.text().strip(),
             "quantity": self.quantity_spin.value(),
             "sale_price": self.price_spin.value(),
