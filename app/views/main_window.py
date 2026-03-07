@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, Qt, QTimer
+from pathlib import Path
+
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QSettings, Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGraphicsOpacityEffect,
@@ -33,10 +36,13 @@ from app.config import DEFAULT_HEIGHT, DEFAULT_WIDTH, MIN_FONT_PX
 from app.controllers.order_controller import OrderController
 from app.controllers.product_controller import ProductController
 from app.controllers.report_controller import ReportController
+from app.utils.invoice_docx import EXPORT_DIR
 from app.utils.time_utils import now_iso_utc7
+from app.utils.invoice_docx import export_invoice_docx
 from app.views.dialogs.auth_dialog import PasswordDialog
 from app.views.dialogs.description_dialog import DescriptionDialog
 from app.views.dialogs.invoice_detail_dialog import InvoiceDetailDialog
+from app.views.dialogs.invoice_preview_dialog import InvoicePreviewDialog
 from app.views.dialogs.product_history_dialog import ProductHistoryDialog
 from app.views.dialogs.product_dialog import ProductFormDialog
 
@@ -63,6 +69,8 @@ class MainWindow(QMainWindow):
         self._suspend_product_search = False
         self._suspend_customer_search = False
         self._selected_product_stock = 0
+        self._settings = QSettings("nnc0599", "PhanMemBanHang")
+        self.invoice_export_dir = self._load_invoice_export_dir()
 
         self.setWindowTitle("Phần mềm bán hàng")
         self.resize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
@@ -282,6 +290,16 @@ class MainWindow(QMainWindow):
         payment_form.addRow("Tổng số tiền", self.total_all_label)
 
         layout.addWidget(payment_box)
+
+        export_location_box = QGroupBox("Nơi lưu file hóa đơn")
+        export_location_layout = QHBoxLayout(export_location_box)
+        self.export_dir_label = QLabel(str(self.invoice_export_dir))
+        self.export_dir_label.setWordWrap(True)
+        self.choose_export_dir_btn = QPushButton("Chọn nơi lưu file")
+        self.choose_export_dir_btn.clicked.connect(self._choose_invoice_export_dir)
+        export_location_layout.addWidget(self.export_dir_label, 1)
+        export_location_layout.addWidget(self.choose_export_dir_btn)
+        layout.addWidget(export_location_box)
 
         self.export_btn = QPushButton("XUẤT HÓA ĐƠN")
         self.export_btn.setMinimumHeight(58)
@@ -506,11 +524,24 @@ class MainWindow(QMainWindow):
         invoice_header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
         invoice_layout.addWidget(self.invoice_table)
 
+        invoice_actions = QHBoxLayout()
+
         self.view_invoice_detail_btn = QPushButton("Xem chi tiết hóa đơn")
         self.view_invoice_detail_btn.setEnabled(False)
         self.view_invoice_detail_btn.clicked.connect(self._show_selected_invoice_detail)
+        invoice_actions.addWidget(self.view_invoice_detail_btn)
+
+        self.export_selected_invoice_btn = QPushButton("Xuất lại file Word")
+        self.export_selected_invoice_btn.setEnabled(False)
+        self.export_selected_invoice_btn.clicked.connect(self._export_selected_invoice_docx)
+        invoice_actions.addWidget(self.export_selected_invoice_btn)
+
+        self.choose_export_dir_from_list_btn = QPushButton("Chọn nơi lưu file")
+        self.choose_export_dir_from_list_btn.clicked.connect(self._choose_invoice_export_dir)
+        invoice_actions.addWidget(self.choose_export_dir_from_list_btn)
+
         self.invoice_table.itemSelectionChanged.connect(self._sync_invoice_action_state)
-        invoice_layout.addWidget(self.view_invoice_detail_btn)
+        invoice_layout.addLayout(invoice_actions)
 
         management_panel.addWidget(customer_group)
         management_panel.addWidget(invoice_group)
@@ -746,6 +777,7 @@ class MainWindow(QMainWindow):
         line = {
             "product_code": product["product_code"],
             "product_name": product["name"],
+            "unit": product.get("unit", ""),
             "quantity": qty,
             "unit_price": unit_price,
             "line_total": qty * unit_price,
@@ -799,6 +831,7 @@ class MainWindow(QMainWindow):
             created_at = self.order_created_at.text().strip() or now_iso_utc7()
             invoice_no = f"HD{created_at.replace('-', '').replace(':', '').replace(' ', '')}"
             total_goods, ship_fee, total_all = self._calculate_invoice_totals()
+            export_lines = [dict(line) for line in self.invoice_lines]
 
             customer_data = {
                 "full_name": self.order_name.text().strip(),
@@ -817,9 +850,38 @@ class MainWindow(QMainWindow):
                 "paid_amount": 0,
                 "payment_date": created_at,
             }
+
+            preview_invoice = {
+                "invoice_no": invoice_no,
+                "created_at": created_at,
+                "customer_name": customer_data["full_name"],
+                "phone": customer_data["phone"],
+                "email": customer_data["email"],
+                "tax_code": customer_data["tax_code"],
+                "address": customer_data["address"],
+                "goods_amount": total_goods,
+                "ship_fee": ship_fee,
+                "total_amount": total_all,
+            }
+
+            preview_dialog = InvoicePreviewDialog(preview_invoice, export_lines, self)
+            preview_dialog.exec()
+            if not preview_dialog.confirmed:
+                return
+
             self.order_controller.create_invoice(customer_data, invoice_data, self.invoice_lines)
 
-            QMessageBox.information(self, "Thành công", f"Đã xuất hóa đơn {invoice_no}")
+            export_path = export_invoice_docx(
+                preview_invoice,
+                export_lines,
+                self.invoice_export_dir,
+            )
+
+            QMessageBox.information(
+                self,
+                "Thành công",
+                f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}",
+            )
             self.invoice_lines.clear()
             self._render_invoice_lines()
             self._update_invoice_totals()
@@ -1028,7 +1090,55 @@ class MainWindow(QMainWindow):
         return invoice_item.text() if invoice_item else None
 
     def _sync_invoice_action_state(self) -> None:
-        self.view_invoice_detail_btn.setEnabled(self._selected_invoice_no() is not None)
+        has_selected_invoice = self._selected_invoice_no() is not None
+        self.view_invoice_detail_btn.setEnabled(has_selected_invoice)
+        self.export_selected_invoice_btn.setEnabled(has_selected_invoice)
+
+    def _load_invoice_export_dir(self) -> Path:
+        stored_path = self._settings.value("invoice_export_dir", str(EXPORT_DIR), type=str)
+        export_dir = Path(stored_path).expanduser()
+        return export_dir
+
+    def _update_invoice_export_dir_label(self) -> None:
+        if getattr(self, "export_dir_label", None) is not None:
+            self.export_dir_label.setText(str(self.invoice_export_dir))
+
+    def _choose_invoice_export_dir(self) -> None:
+        selected_dir = QFileDialog.getExistingDirectory(
+            self,
+            "Chọn nơi lưu file hóa đơn",
+            str(self.invoice_export_dir),
+        )
+        if not selected_dir:
+            return
+
+        self.invoice_export_dir = Path(selected_dir)
+        self._settings.setValue("invoice_export_dir", str(self.invoice_export_dir))
+        self._update_invoice_export_dir_label()
+
+    def _export_selected_invoice_docx(self) -> None:
+        invoice_no = self._selected_invoice_no()
+        if not invoice_no:
+            return
+
+        detail = self.order_controller.get_invoice_detail(invoice_no)
+        if not detail:
+            QMessageBox.warning(self, "Không tìm thấy", "Không lấy được chi tiết hóa đơn")
+            return
+
+        try:
+            export_path = export_invoice_docx(
+                detail["invoice"],
+                detail["items"],
+                self.invoice_export_dir,
+            )
+            QMessageBox.information(
+                self,
+                "Thành công",
+                f"Đã xuất lại file Word cho hóa đơn {invoice_no}\nFile Word: {export_path}",
+            )
+        except Exception as exc:  # pragma: no cover - dialog feedback
+            QMessageBox.critical(self, "Lỗi", str(exc))
 
     def _show_selected_invoice_detail(self) -> None:
         invoice_no = self._selected_invoice_no()

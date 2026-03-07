@@ -39,6 +39,7 @@ class Invoice:
 class InvoiceItem:
     product_code: str
     product_name: str
+    unit: str
     quantity: int
     unit_price: int
     line_total: int
