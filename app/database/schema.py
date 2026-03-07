@@ -163,26 +163,6 @@ def seed_sample_products() -> None:
     with get_connection() as conn:
         now = now_iso_utc7()
         sample_rows = [
-            (
-                "SP001",
-                "Pin Năng Lượng 550W",
-                "tấm",
-                200,
-                3500000,
-                now,
-                "Pin năng lượng mặt trời hiệu suất cao, phù hợp cho hệ thống dân dụng.",
-                "Khởi tạo mẫu",
-            ),
-            (
-                "SP002",
-                "Biến Tần Hybrid 5kW",
-                "bộ",
-                45,
-                9800000,
-                now,
-                "Biến tần hybrid hỗ trợ lưu trữ, giảm hao phí điện năng.",
-                "Khởi tạo mẫu",
-            ),
         ]
 
         for row in sample_rows:
