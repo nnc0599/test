@@ -347,9 +347,14 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         actions = QHBoxLayout()
+        self.btn_add_product = QPushButton("Thêm sản phẩm")
         self.btn_edit_product = QPushButton("Sửa thông tin")
         self.btn_delete_product = QPushButton("Xóa sản phẩm")
 
+        self.btn_add_product.setStyleSheet(
+            "QPushButton { background: #22C55E; color: #0B1A10; }"
+            "QPushButton:hover { background: #16A34A; color: white; }"
+        )
         self.btn_edit_product.setStyleSheet(
             "QPushButton { background: #FDBA74; color: #4A2A00; }"
             "QPushButton:hover { background: #FB923C; color: white; }"
@@ -361,7 +366,7 @@ class MainWindow(QMainWindow):
             "QPushButton:disabled { background: #FECACA; color: #7F1D1D; }"
         )
 
-        for btn in [self.btn_edit_product, self.btn_delete_product]:
+        for btn in [self.btn_add_product, self.btn_edit_product, self.btn_delete_product]:
             btn.setMinimumHeight(56)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             actions.addWidget(btn)
@@ -389,6 +394,7 @@ class MainWindow(QMainWindow):
         self.btn_edit_product.setEnabled(False)
         self.btn_delete_product.setEnabled(False)
 
+        self.btn_add_product.clicked.connect(self._on_add_product)
         self.btn_edit_product.clicked.connect(self._on_edit_product)
         self.btn_delete_product.clicked.connect(self._on_delete_product)
         self.product_table.itemSelectionChanged.connect(self._sync_product_action_state)
