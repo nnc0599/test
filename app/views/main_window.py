@@ -250,9 +250,9 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(add_item_box)
 
-        self.order_table = QTableWidget(0, 6)
+        self.order_table = QTableWidget(0, 7)
         self.order_table.setHorizontalHeaderLabels(
-            ["STT", "Mã hàng", "Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền"]
+            ["STT", "Mã hàng", "Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Xóa"]
         )
         self.order_table.verticalHeader().setVisible(False)
         self.order_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -264,6 +264,7 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.Fixed)
         layout.addWidget(self.order_table)
 
         payment_box = QGroupBox("Tổng tiền hóa đơn")
@@ -767,6 +768,21 @@ class MainWindow(QMainWindow):
             for col, value in enumerate(values):
                 self.order_table.setItem(idx - 1, col, QTableWidgetItem(value))
 
+            delete_btn = QPushButton("Xóa")
+            delete_btn.setStyleSheet(
+                "QPushButton { background: #FCA5A5; color: #4C1D1D; padding: 6px 10px; }"
+                "QPushButton:hover { background: #F87171; color: white; }"
+            )
+            delete_btn.clicked.connect(lambda checked=False, row=idx - 1: self._remove_invoice_line(row))
+            self.order_table.setCellWidget(idx - 1, 6, delete_btn)
+
+    def _remove_invoice_line(self, row: int) -> None:
+        if row < 0 or row >= len(self.invoice_lines):
+            return
+        self.invoice_lines.pop(row)
+        self._render_invoice_lines()
+        self._update_invoice_totals()
+
     def _calculate_invoice_totals(self) -> tuple[int, int, int]:
         total_goods = sum(int(line["line_total"]) for line in self.invoice_lines)
         ship_fee = self.ship_fee_spin.value()
@@ -1039,6 +1055,7 @@ class MainWindow(QMainWindow):
         self.order_table.setColumnWidth(3, 96)
         self.order_table.setColumnWidth(4, 130)
         self.order_table.setColumnWidth(5, 150)
+        self.order_table.setColumnWidth(6, 88)
 
     def _sync_font_by_window_size(self) -> None:
         width_factor = self.width() / 72
