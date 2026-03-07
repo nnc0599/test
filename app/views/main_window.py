@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -60,6 +60,8 @@ class MainWindow(QMainWindow):
         self.invoice_lines: list[dict[str, Any]] = []
         self.selected_product_code: str | None = None
         self._suspend_product_search = False
+        self._suspend_customer_search = False
+        self._selected_product_stock = 0
 
         self.setWindowTitle("Phần mềm bán hàng")
         self.resize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
@@ -67,6 +69,9 @@ class MainWindow(QMainWindow):
 
         self._apply_base_style()
         self._build_ui()
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
         self._bind_runtime_clock()
         self._sync_font_by_window_size()
 
@@ -175,6 +180,10 @@ class MainWindow(QMainWindow):
         self.order_created_at.setReadOnly(True)
 
         self.order_address = QLineEdit()
+        self.customer_suggestion_list = QListWidget()
+        self.customer_suggestion_list.setAlternatingRowColors(True)
+        self.customer_suggestion_list.setMaximumHeight(140)
+        self.customer_suggestion_list.hide()
 
         customer_grid.addWidget(QLabel("Nhập họ tên"), 0, 0)
         customer_grid.addWidget(self.order_name, 0, 1)
@@ -185,6 +194,7 @@ class MainWindow(QMainWindow):
 
         customer_grid.addWidget(QLabel("Địa chỉ"), 1, 0)
         customer_grid.addWidget(self.order_address, 1, 1, 1, 5)
+        customer_grid.addWidget(self.customer_suggestion_list, 2, 1, 1, 5)
 
         layout.addWidget(customer_box)
 
@@ -206,6 +216,8 @@ class MainWindow(QMainWindow):
 
         self.order_qty_spin = QSpinBox()
         self.order_qty_spin.setRange(1, 1_000_000_000)
+        self.order_qty_hint = QLabel("Tồn hiện tại: chưa chọn sản phẩm")
+        self.order_qty_hint.setStyleSheet("color: #475569; font-style: italic;")
 
         self.order_price_spin = QSpinBox()
         self.order_price_spin.setRange(0, 2_000_000_000)
@@ -223,6 +235,7 @@ class MainWindow(QMainWindow):
         add_grid.addWidget(self.order_price_spin, 0, 8)
         add_grid.addWidget(self.add_line_btn, 0, 9)
         add_grid.addWidget(self.search_product_list, 1, 1, 1, 4)
+        add_grid.addWidget(self.order_qty_hint, 1, 5, 1, 5)
 
         layout.addWidget(add_item_box)
 
@@ -266,8 +279,40 @@ class MainWindow(QMainWindow):
         self.search_product_edit.textChanged.connect(self._refresh_product_suggestions)
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
         self.search_product_list.itemClicked.connect(self._on_product_suggestion_clicked)
+        self.order_qty_spin.valueChanged.connect(self._update_quantity_hint)
+        self.order_name.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
+        self.order_phone.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
+        self.customer_suggestion_list.itemClicked.connect(self._on_customer_suggestion_clicked)
 
         return page
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        if event.type() == QEvent.MouseButtonPress:
+            global_position = event.globalPosition().toPoint()
+            clicked_widget = QApplication.widgetAt(global_position)
+            self._hide_suggestion_lists_if_needed(clicked_widget)
+        return super().eventFilter(watched, event)
+
+    def _widget_is_within(self, widget: QWidget | None, container: QWidget) -> bool:
+        current = widget
+        while current is not None:
+            if current is container:
+                return True
+            current = current.parentWidget()
+        return False
+
+    def _hide_suggestion_lists_if_needed(self, clicked_widget: QWidget | None) -> None:
+        if self.search_product_list.isVisible() and not any(
+            self._widget_is_within(clicked_widget, widget)
+            for widget in [self.search_product_list, self.search_product_edit, self.select_product_btn]
+        ):
+            self.search_product_list.hide()
+
+        if self.customer_suggestion_list.isVisible() and not any(
+            self._widget_is_within(clicked_widget, widget)
+            for widget in [self.customer_suggestion_list, self.order_name, self.order_phone, self.order_address]
+        ):
+            self.customer_suggestion_list.hide()
 
     def _build_product_page(self) -> QWidget:
         page = QWidget()
@@ -477,6 +522,10 @@ class MainWindow(QMainWindow):
         if self._suspend_product_search:
             return
 
+        self.selected_product_code = None
+        self._selected_product_stock = 0
+        self._update_quantity_hint()
+
         products = self.order_controller.search_products(keyword)
         self.product_map = {item["product_code"]: item for item in products}
         self.search_product_list.clear()
@@ -504,14 +553,73 @@ class MainWindow(QMainWindow):
         if not product:
             return
         self.selected_product_code = product_code
+        self._selected_product_stock = int(product["quantity"])
         self._suspend_product_search = True
         self.search_product_edit.setText(f"{product['product_code']} | {product['name']}")
         self._suspend_product_search = False
         self.search_product_list.hide()
         self.order_price_spin.setValue(int(product["sale_price"]))
-        stock = int(product["quantity"])
+        stock = self._selected_product_stock
         self.order_qty_spin.setMaximum(max(stock, 1))
         self.order_qty_spin.setToolTip(f"Số lượng tồn: {stock}")
+        self._update_quantity_hint()
+
+    def _update_quantity_hint(self) -> None:
+        if not self.selected_product_code:
+            self.order_qty_hint.setText("Tồn hiện tại: chưa chọn sản phẩm")
+            self.order_qty_hint.setStyleSheet("color: #475569; font-style: italic;")
+            return
+
+        remaining = self._selected_product_stock - self.order_qty_spin.value()
+        if remaining >= 0:
+            self.order_qty_hint.setText(
+                f"Tồn hiện tại: {self._selected_product_stock} | Còn lại sau khi thêm: {remaining}"
+            )
+            self.order_qty_hint.setStyleSheet("color: #475569; font-style: italic;")
+        else:
+            self.order_qty_hint.setText(
+                f"Tồn hiện tại: {self._selected_product_stock} | Vượt tồn: {abs(remaining)}"
+            )
+            self.order_qty_hint.setStyleSheet("color: #B91C1C; font-style: italic;")
+
+    def _refresh_customer_suggestions_from_inputs(self) -> None:
+        if self._suspend_customer_search:
+            return
+
+        name_keyword = self.order_name.text().strip()
+        phone_keyword = self.order_phone.text().strip()
+        keyword = phone_keyword or name_keyword
+
+        self.customer_suggestion_list.clear()
+        if not keyword:
+            self.customer_suggestion_list.hide()
+            return
+
+        customers = self.order_controller.search_customers(keyword)
+        if not customers:
+            self.customer_suggestion_list.hide()
+            return
+
+        for customer in customers:
+            label = (
+                f"{customer.get('full_name', '')} | {customer.get('phone', '')}"
+                f" | {customer.get('address', '')}"
+            )
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole, customer)
+            self.customer_suggestion_list.addItem(item)
+
+        self.customer_suggestion_list.setCurrentRow(0)
+        self.customer_suggestion_list.show()
+
+    def _on_customer_suggestion_clicked(self, item: QListWidgetItem) -> None:
+        customer = item.data(Qt.UserRole) or {}
+        self._suspend_customer_search = True
+        self.order_name.setText(customer.get("full_name", ""))
+        self.order_phone.setText(customer.get("phone", ""))
+        self.order_address.setText(customer.get("address", ""))
+        self._suspend_customer_search = False
+        self.customer_suggestion_list.hide()
 
     def _pick_product_from_input(self) -> bool:
         raw_text = self.search_product_edit.text().strip()
@@ -640,9 +748,13 @@ class MainWindow(QMainWindow):
             self.search_product_edit.clear()
             self.search_product_list.clear()
             self.search_product_list.hide()
+            self.customer_suggestion_list.clear()
+            self.customer_suggestion_list.hide()
             self.selected_product_code = None
+            self._selected_product_stock = 0
             self.order_price_spin.setValue(0)
             self.order_qty_spin.setValue(1)
+            self._update_quantity_hint()
             self.refresh_products()
             self.refresh_report()
         except Exception as exc:  # pragma: no cover - dialog feedback

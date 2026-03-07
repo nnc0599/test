@@ -164,6 +164,21 @@ class CustomerRepository:
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def search_customers(self, keyword: str) -> list[dict]:
+        like_kw = f"%{keyword.strip()}%"
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT full_name, phone, address, note
+                FROM customers
+                WHERE full_name LIKE ? OR phone LIKE ? OR address LIKE ?
+                ORDER BY id DESC
+                LIMIT 20
+                """,
+                (like_kw, like_kw, like_kw),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
 
 class InvoiceRepository:
     def create_invoice(self, payload: dict, lines: list[dict]) -> None:

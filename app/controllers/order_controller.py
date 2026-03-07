@@ -21,6 +21,11 @@ class OrderController:
     def list_customers(self) -> list[dict]:
         return self.customer_repo.list_customers()
 
+    def search_customers(self, keyword: str) -> list[dict]:
+        if not keyword.strip():
+            return self.customer_repo.list_customers()[:20]
+        return self.customer_repo.search_customers(keyword)
+
     def list_invoices(self) -> list[dict]:
         return self.invoice_repo.list_invoices()
 
