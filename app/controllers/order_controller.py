@@ -32,6 +32,9 @@ class OrderController:
     def get_invoice_detail(self, invoice_no: str) -> dict | None:
         return self.invoice_repo.get_invoice_detail(invoice_no)
 
+    def generate_invoice_no(self) -> str:
+        return self.invoice_repo.generate_invoice_no()
+
     def create_invoice(self, customer_data: dict, invoice_data: dict, lines: list[dict]) -> None:
         if not lines:
             raise ValueError("Hóa đơn phải có ít nhất 1 hàng hóa")

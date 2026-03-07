@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Iterable
+import re
 
 from app.database.connection import get_connection
 from app.utils.time_utils import now_iso_utc7, today_utc7
@@ -241,6 +242,23 @@ class CustomerRepository:
 
 
 class InvoiceRepository:
+    def generate_invoice_no(self) -> str:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT invoice_no
+                FROM invoices
+                """
+            ).fetchall()
+
+        max_number = 0
+        for row in rows:
+            invoice_no = str(row["invoice_no"] or "").strip()
+            if re.fullmatch(r"\d{6}", invoice_no):
+                max_number = max(max_number, int(invoice_no))
+
+        return f"{max_number + 1:06d}"
+
     def create_invoice(self, payload: dict, lines: list[dict]) -> None:
         with get_connection() as conn:
             conn.execute(

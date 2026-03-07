@@ -536,11 +536,16 @@ class MainWindow(QMainWindow):
         self.export_selected_invoice_btn.clicked.connect(self._export_selected_invoice_docx)
         invoice_actions.addWidget(self.export_selected_invoice_btn)
 
+        self.report_export_dir_label = QLabel(str(self.invoice_export_dir))
+        self.report_export_dir_label.setWordWrap(True)
+        invoice_actions.addWidget(self.report_export_dir_label, 1)
+
         self.choose_export_dir_from_list_btn = QPushButton("Chọn nơi lưu file")
         self.choose_export_dir_from_list_btn.clicked.connect(self._choose_invoice_export_dir)
         invoice_actions.addWidget(self.choose_export_dir_from_list_btn)
 
         self.invoice_table.itemSelectionChanged.connect(self._sync_invoice_action_state)
+        self.invoice_table.itemDoubleClicked.connect(lambda _item: self._show_selected_invoice_detail())
         invoice_layout.addLayout(invoice_actions)
 
         management_panel.addWidget(customer_group)
@@ -829,7 +834,7 @@ class MainWindow(QMainWindow):
     def _export_invoice(self) -> None:
         try:
             created_at = self.order_created_at.text().strip() or now_iso_utc7()
-            invoice_no = f"HD{created_at.replace('-', '').replace(':', '').replace(' ', '')}"
+            invoice_no = self.order_controller.generate_invoice_no()
             total_goods, ship_fee, total_all = self._calculate_invoice_totals()
             export_lines = [dict(line) for line in self.invoice_lines]
 
@@ -1102,6 +1107,8 @@ class MainWindow(QMainWindow):
     def _update_invoice_export_dir_label(self) -> None:
         if getattr(self, "export_dir_label", None) is not None:
             self.export_dir_label.setText(str(self.invoice_export_dir))
+        if getattr(self, "report_export_dir_label", None) is not None:
+            self.report_export_dir_label.setText(str(self.invoice_export_dir))
 
     def _choose_invoice_export_dir(self) -> None:
         selected_dir = QFileDialog.getExistingDirectory(
@@ -1127,6 +1134,11 @@ class MainWindow(QMainWindow):
             return
 
         try:
+            preview_dialog = InvoicePreviewDialog(detail["invoice"], detail["items"], self)
+            preview_dialog.exec()
+            if not preview_dialog.confirmed:
+                return
+
             export_path = export_invoice_docx(
                 detail["invoice"],
                 detail["items"],
