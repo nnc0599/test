@@ -58,6 +58,19 @@ CREATE TABLE IF NOT EXISTS payments (
     remaining_amount INTEGER NOT NULL,
     FOREIGN KEY (invoice_no) REFERENCES invoices(invoice_no) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS product_update_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    unit TEXT,
+    quantity INTEGER NOT NULL,
+    sale_price INTEGER NOT NULL,
+    description TEXT,
+    note TEXT,
+    changed_at TEXT NOT NULL,
+    FOREIGN KEY (product_code) REFERENCES products(product_code) ON DELETE CASCADE
+);
 """
 
 
@@ -109,6 +122,17 @@ REQUIRED_TABLE_COLUMNS = {
         "total_amount": "INTEGER NOT NULL",
         "paid_amount": "INTEGER NOT NULL",
         "remaining_amount": "INTEGER NOT NULL",
+    },
+    "product_update_history": {
+        "id": "INTEGER",
+        "product_code": "TEXT NOT NULL",
+        "name": "TEXT NOT NULL",
+        "unit": "TEXT",
+        "quantity": "INTEGER NOT NULL",
+        "sale_price": "INTEGER NOT NULL",
+        "description": "TEXT",
+        "note": "TEXT",
+        "changed_at": "TEXT NOT NULL",
     },
 }
 

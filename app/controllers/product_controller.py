@@ -27,5 +27,8 @@ class ProductController:
             raise ValueError("Ghi chú là bắt buộc khi sửa thông tin sản phẩm")
         self.repo.update_product(product_code, payload)
 
+    def list_product_update_history(self, product_code: str) -> list[dict]:
+        return self.repo.list_product_update_history(product_code)
+
     def delete_product(self, product_code: str) -> None:
         self.repo.delete_product(product_code)

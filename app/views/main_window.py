@@ -37,6 +37,7 @@ from app.utils.time_utils import now_iso_utc7
 from app.views.dialogs.auth_dialog import PasswordDialog
 from app.views.dialogs.description_dialog import DescriptionDialog
 from app.views.dialogs.invoice_detail_dialog import InvoiceDetailDialog
+from app.views.dialogs.product_history_dialog import ProductHistoryDialog
 from app.views.dialogs.product_dialog import ProductFormDialog
 
 
@@ -349,6 +350,7 @@ class MainWindow(QMainWindow):
         actions = QHBoxLayout()
         self.btn_add_product = QPushButton("Thêm sản phẩm")
         self.btn_edit_product = QPushButton("Sửa thông tin")
+        self.btn_product_history = QPushButton("Lịch sử")
         self.btn_delete_product = QPushButton("Xóa sản phẩm")
 
         self.btn_add_product.setStyleSheet(
@@ -360,13 +362,18 @@ class MainWindow(QMainWindow):
             "QPushButton:hover { background: #FB923C; color: white; }"
             "QPushButton:disabled { background: #FED7AA; color: #9A3412; }"
         )
+        self.btn_product_history.setStyleSheet(
+            "QPushButton { background: #93C5FD; color: #102A43; }"
+            "QPushButton:hover { background: #60A5FA; color: white; }"
+            "QPushButton:disabled { background: #BFDBFE; color: #1E3A8A; }"
+        )
         self.btn_delete_product.setStyleSheet(
             "QPushButton { background: #FCA5A5; color: #4C1D1D; }"
             "QPushButton:hover { background: #F87171; color: white; }"
             "QPushButton:disabled { background: #FECACA; color: #7F1D1D; }"
         )
 
-        for btn in [self.btn_add_product, self.btn_edit_product, self.btn_delete_product]:
+        for btn in [self.btn_add_product, self.btn_edit_product, self.btn_product_history, self.btn_delete_product]:
             btn.setMinimumHeight(56)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             actions.addWidget(btn)
@@ -392,10 +399,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.product_table)
 
         self.btn_edit_product.setEnabled(False)
+        self.btn_product_history.setEnabled(False)
         self.btn_delete_product.setEnabled(False)
 
         self.btn_add_product.clicked.connect(self._on_add_product)
         self.btn_edit_product.clicked.connect(self._on_edit_product)
+        self.btn_product_history.clicked.connect(self._on_view_product_history)
         self.btn_delete_product.clicked.connect(self._on_delete_product)
         self.product_table.itemSelectionChanged.connect(self._sync_product_action_state)
 
@@ -863,7 +872,23 @@ class MainWindow(QMainWindow):
     def _sync_product_action_state(self) -> None:
         has_selection = self._selected_product_code() is not None
         self.btn_edit_product.setEnabled(has_selection)
+        self.btn_product_history.setEnabled(has_selection)
         self.btn_delete_product.setEnabled(has_selection)
+
+    def _on_view_product_history(self) -> None:
+        code = self._selected_product_code()
+        if not code:
+            QMessageBox.information(self, "Thông báo", "Hãy chọn sản phẩm để xem lịch sử")
+            return
+
+        product = self.product_map.get(code)
+        if not product:
+            QMessageBox.warning(self, "Không tìm thấy", "Sản phẩm đã chọn không tồn tại")
+            return
+
+        history_rows = self.product_controller.list_product_update_history(code)
+        dialog = ProductHistoryDialog(product, history_rows, self)
+        dialog.exec()
 
     def _on_add_product(self) -> None:
         if not PasswordDialog.verify(self, "Xác thực thêm sản phẩm"):

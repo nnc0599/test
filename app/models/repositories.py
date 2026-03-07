@@ -52,6 +52,20 @@ class ProductRepository:
 
     def update_product(self, product_code: str, payload: dict) -> None:
         with get_connection() as conn:
+            existing = conn.execute(
+                """
+                SELECT product_code, name, unit, quantity, sale_price, updated_at, description, note
+                FROM products
+                WHERE product_code = ?
+                """,
+                (product_code,),
+            ).fetchone()
+            if not existing:
+                raise ValueError("Sản phẩm không tồn tại")
+
+            updated_at = now_iso_utc7()
+            new_quantity = int(payload.get("quantity", 0))
+            new_sale_price = int(payload.get("sale_price", 0))
             conn.execute(
                 """
                 UPDATE products
@@ -68,14 +82,56 @@ class ProductRepository:
                 (
                     payload["name"],
                     payload.get("unit", ""),
-                    int(payload.get("quantity", 0)),
-                    int(payload.get("sale_price", 0)),
-                    now_iso_utc7(),
+                    new_quantity,
+                    new_sale_price,
+                    updated_at,
                     payload.get("description", ""),
                     payload["note"],
                     product_code,
                 ),
             )
+
+            quantity_changed = int(existing["quantity"]) != new_quantity
+            price_changed = int(existing["sale_price"]) != new_sale_price
+            if quantity_changed or price_changed:
+                conn.execute(
+                    """
+                    INSERT INTO product_update_history (
+                        product_code, name, unit, quantity, sale_price, description, note, changed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        product_code,
+                        payload["name"],
+                        payload.get("unit", ""),
+                        new_quantity,
+                        new_sale_price,
+                        payload.get("description", ""),
+                        payload["note"],
+                        updated_at,
+                    ),
+                )
+
+    def list_product_update_history(self, product_code: str) -> list[dict]:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    product_code,
+                    name,
+                    unit,
+                    quantity,
+                    sale_price,
+                    description,
+                    note,
+                    changed_at
+                FROM product_update_history
+                WHERE product_code = ?
+                ORDER BY changed_at DESC, id DESC
+                """,
+                (product_code,),
+            ).fetchall()
+            return [dict(row) for row in rows]
 
     def delete_product(self, product_code: str) -> None:
         with get_connection() as conn:
