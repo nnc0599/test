@@ -61,47 +61,55 @@ CREATE TABLE IF NOT EXISTS payments (
 """
 
 
-EXPECTED_TABLE_COLUMNS = {
-    "products": [
-        "product_code",
-        "name",
-        "unit",
-        "quantity",
-        "sale_price",
-        "updated_at",
-        "description",
-        "note",
-    ],
-    "customers": ["id", "full_name", "phone", "email", "tax_code", "address", "note"],
-    "invoices": [
-        "invoice_no",
-        "created_at",
-        "customer_name",
-        "phone",
-        "email",
-        "tax_code",
-        "address",
-        "total_amount",
-    ],
-    "invoice_items": [
-        "id",
-        "invoice_no",
-        "product_code",
-        "product_name",
-        "quantity",
-        "unit_price",
-        "line_total",
-    ],
-    "payments": [
-        "id",
-        "invoice_no",
-        "customer_name",
-        "purchase_date",
-        "payment_date",
-        "total_amount",
-        "paid_amount",
-        "remaining_amount",
-    ],
+REQUIRED_TABLE_COLUMNS = {
+    "products": {
+        "product_code": "TEXT",
+        "name": "TEXT NOT NULL",
+        "unit": "TEXT",
+        "quantity": "INTEGER NOT NULL DEFAULT 0",
+        "sale_price": "INTEGER NOT NULL DEFAULT 0",
+        "updated_at": "TEXT NOT NULL",
+        "description": "TEXT",
+        "note": "TEXT",
+    },
+    "customers": {
+        "id": "INTEGER",
+        "full_name": "TEXT NOT NULL",
+        "phone": "TEXT",
+        "email": "TEXT",
+        "tax_code": "TEXT",
+        "address": "TEXT",
+        "note": "TEXT",
+    },
+    "invoices": {
+        "invoice_no": "TEXT",
+        "created_at": "TEXT NOT NULL",
+        "customer_name": "TEXT NOT NULL",
+        "phone": "TEXT",
+        "email": "TEXT",
+        "tax_code": "TEXT",
+        "address": "TEXT",
+        "total_amount": "INTEGER NOT NULL",
+    },
+    "invoice_items": {
+        "id": "INTEGER",
+        "invoice_no": "TEXT NOT NULL",
+        "product_code": "TEXT NOT NULL",
+        "product_name": "TEXT NOT NULL",
+        "quantity": "INTEGER NOT NULL",
+        "unit_price": "INTEGER NOT NULL",
+        "line_total": "INTEGER NOT NULL",
+    },
+    "payments": {
+        "id": "INTEGER",
+        "invoice_no": "TEXT",
+        "customer_name": "TEXT NOT NULL",
+        "purchase_date": "TEXT NOT NULL",
+        "payment_date": "TEXT",
+        "total_amount": "INTEGER NOT NULL",
+        "paid_amount": "INTEGER NOT NULL",
+        "remaining_amount": "INTEGER NOT NULL",
+    },
 }
 
 
@@ -110,25 +118,21 @@ def _table_columns(conn, table_name: str) -> list[str]:
     return [row[1] for row in rows]
 
 
-def _schema_matches(conn) -> bool:
-    for table_name, expected_columns in EXPECTED_TABLE_COLUMNS.items():
-        if _table_columns(conn, table_name) != expected_columns:
-            return False
-    return True
+def _ensure_missing_columns(conn) -> None:
+    for table_name, required_columns in REQUIRED_TABLE_COLUMNS.items():
+        existing_columns = set(_table_columns(conn, table_name))
+        for column_name, column_definition in required_columns.items():
+            if column_name in existing_columns:
+                continue
+            conn.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+            )
 
 
 def init_schema() -> None:
     with get_connection() as conn:
-        has_products = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'products'"
-        ).fetchone()
-        if has_products and not _schema_matches(conn):
-            conn.execute("DROP TABLE IF EXISTS payments")
-            conn.execute("DROP TABLE IF EXISTS invoice_items")
-            conn.execute("DROP TABLE IF EXISTS invoices")
-            conn.execute("DROP TABLE IF EXISTS customers")
-            conn.execute("DROP TABLE IF EXISTS products")
         conn.executescript(SCHEMA_SQL)
+        _ensure_missing_columns(conn)
 
 
 def seed_sample_products() -> None:

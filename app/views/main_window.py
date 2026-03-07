@@ -467,9 +467,19 @@ class MainWindow(QMainWindow):
 
         invoice_group = QGroupBox("Danh sách hóa đơn")
         invoice_layout = QVBoxLayout(invoice_group)
-        self.invoice_table = QTableWidget(0, 7)
+        self.invoice_table = QTableWidget(0, 9)
         self.invoice_table.setHorizontalHeaderLabels(
-            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Địa chỉ", "Tổng tiền", "Số dòng"]
+            [
+                "Số hóa đơn",
+                "Ngày tạo",
+                "Khách hàng",
+                "Số điện thoại",
+                "Gmail",
+                "Mã số thuế",
+                "Địa chỉ",
+                "Tổng tiền",
+                "Số dòng",
+            ]
         )
         self.invoice_table.verticalHeader().setVisible(False)
         self.invoice_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -479,9 +489,11 @@ class MainWindow(QMainWindow):
         invoice_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        invoice_header.setSectionResizeMode(4, QHeaderView.Stretch)
+        invoice_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        invoice_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(6, QHeaderView.Stretch)
+        invoice_header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
         invoice_layout.addWidget(self.invoice_table)
 
         self.view_invoice_detail_btn = QPushButton("Xem chi tiết hóa đơn")
@@ -955,6 +967,8 @@ class MainWindow(QMainWindow):
                 invoice["created_at"],
                 invoice["customer_name"],
                 invoice.get("phone", ""),
+                invoice.get("email", ""),
+                invoice.get("tax_code", ""),
                 invoice.get("address", ""),
                 format_money(invoice["total_amount"]),
                 str(invoice["item_count"]),
