@@ -264,14 +264,15 @@ class InvoiceRepository:
             conn.executemany(
                 """
                 INSERT INTO invoice_items (
-                    invoice_no, product_code, product_name, quantity, unit_price, line_total
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    invoice_no, product_code, product_name, unit, quantity, unit_price, line_total
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
                         payload["invoice_no"],
                         line["product_code"],
                         line["product_name"],
+                        line.get("unit", ""),
                         int(line["quantity"]),
                         int(line["unit_price"]),
                         int(line["line_total"]),
@@ -359,10 +360,17 @@ class InvoiceRepository:
 
             items = conn.execute(
                 """
-                SELECT product_code, product_name, quantity, unit_price, line_total
+                SELECT
+                    invoice_items.product_code,
+                    invoice_items.product_name,
+                    COALESCE(invoice_items.unit, products.unit, '') AS unit,
+                    invoice_items.quantity,
+                    invoice_items.unit_price,
+                    invoice_items.line_total
                 FROM invoice_items
-                WHERE invoice_no = ?
-                ORDER BY id ASC
+                LEFT JOIN products ON products.product_code = invoice_items.product_code
+                WHERE invoice_items.invoice_no = ?
+                ORDER BY invoice_items.id ASC
                 """,
                 (invoice_no,),
             ).fetchall()
