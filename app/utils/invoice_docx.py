@@ -104,17 +104,21 @@ def _parse_created_at(created_at: str) -> datetime:
     raise ValueError(f"Không đọc được ngày tạo hóa đơn: {created_at}")
 
 
-def _set_paragraph_text(paragraph, text: str, alignment=None) -> None:
+def _set_paragraph_text(paragraph, text: str, alignment=None, bold: bool | None = None, italic: bool | None = None) -> None:
     paragraph.text = text
     if alignment is not None:
         paragraph.alignment = alignment
     for run in paragraph.runs:
-        _set_run_font(run)
+        _set_run_font(run, bold=bold, italic=italic)
 
 
-def _set_run_font(run) -> None:
+def _set_run_font(run, bold: bool | None = None, italic: bool | None = None) -> None:
     run.font.name = "Times New Roman"
     run.font.size = Pt(12)
+    if bold is not None:
+        run.bold = bold
+    if italic is not None:
+        run.italic = italic
     r_pr = run._element.get_or_add_rPr()
     r_fonts = r_pr.find(qn("w:rFonts"))
     if r_fonts is None:
@@ -134,13 +138,13 @@ def _set_run_font(run) -> None:
     size_cs.set(qn("w:val"), "24")
 
 
-def _set_cell_text(cell, text: str, alignment=None) -> None:
+def _set_cell_text(cell, text: str, alignment=None, bold: bool | None = None, italic: bool | None = None) -> None:
     cell.text = text
     for paragraph in cell.paragraphs:
         if alignment is not None:
             paragraph.alignment = alignment
         for run in paragraph.runs:
-            _set_run_font(run)
+            _set_run_font(run, bold=bold, italic=italic)
 
 
 def _remove_paragraph(paragraph) -> None:
@@ -216,8 +220,10 @@ def _populate_item_row(row, index: int, item: dict) -> None:
         format_money(int(item.get("unit_price", 0))),
         format_money(int(item.get("line_total", 0))),
     ]
-    for cell, value in zip(row.cells, values):
-        _set_cell_text(cell, value)
+    centered_columns = {0, 3, 4, 5, 6}
+    for column_index, (cell, value) in enumerate(zip(row.cells, values)):
+        alignment = WD_ALIGN_PARAGRAPH.CENTER if column_index in centered_columns else None
+        _set_cell_text(cell, value, alignment=alignment)
 
 
 def _image_file_to_data_uri(path: Path) -> str:
@@ -434,6 +440,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict]) -> str:
                     }}
                     .meta-invoice-row td {{
                         padding-top: 0.8mm;
+                        font-style: italic;
                     }}
                     .info-table {{
                         margin-bottom: 2.5mm;
@@ -461,12 +468,19 @@ def build_invoice_preview_html(invoice: dict, items: list[dict]) -> str:
                     .items-table th, .items-table td {{
                         border: 1px solid #111827;
                         padding: 1.2mm 0.9mm;
-                        text-align: center;
+                        text-align: left;
                         vertical-align: middle;
                         font-size: 12pt;
                     }}
                     .items-table th {{
                         font-weight: bold;
+                    }}
+                    .items-table .col-stt,
+                    .items-table .col-unit,
+                    .items-table .col-qty,
+                    .items-table .col-price,
+                    .items-table .col-total {{
+                        text-align: center;
                     }}
                     .items-table .col-name {{
                         text-align: center;
@@ -487,6 +501,10 @@ def build_invoice_preview_html(invoice: dict, items: list[dict]) -> str:
                         margin-top: 1.8mm;
                         font-size: 12pt;
                         text-align: center;
+                        font-style: italic;
+                    }}
+                    .total-row td {{
+                        font-weight: bold;
                     }}
                     .signatures {{
                         margin-top: 14mm;
@@ -538,23 +556,23 @@ def build_invoice_preview_html(invoice: dict, items: list[dict]) -> str:
                     <table class="items-table">
                         <thead>
                             <tr>
-                                <th>TT</th>
-                                <th>Mã hàng</th>
-                                <th>Tên sản phẩm</th>
-                                <th>ĐV</th>
-                                <th>SL</th>
-                                <th>Đơn giá</th>
-                                <th>Thành tiền</th>
+                                <th class="col-stt">TT</th>
+                                <th class="col-code">Mã hàng</th>
+                                <th class="col-name">Tên sản phẩm</th>
+                                <th class="col-unit">ĐV</th>
+                                <th class="col-qty">SL</th>
+                                <th class="col-price">Đơn giá</th>
+                                <th class="col-total">Thành tiền</th>
                             </tr>
                         </thead>
                         <tbody>
                             {item_rows}
-                            <tr>
+                            <tr class="total-row">
                                 <td class="total-label" colspan="3">Tổng thanh toán</td>
                                 <td></td>
                                 <td></td>
                                 <td></td>
-                                <td><strong>{format_money(total_amount)}</strong></td>
+                                <td>{format_money(total_amount)}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -617,6 +635,7 @@ def export_invoice_docx(invoice: dict, items: list[dict], output_dir: Path | Non
         invoice_paragraph,
         f"Số: {invoice_no}",
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
+        italic=True,
     )
 
     customer_table = _build_customer_info_table(doc, invoice)
@@ -628,7 +647,12 @@ def export_invoice_docx(invoice: dict, items: list[dict], output_dir: Path | Non
         money_words_paragraph,
         f"Số tiền viết bằng chữ: {money_to_vietnamese(int(invoice.get('total_amount', 0)))}",
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
+        italic=True,
     )
+
+    for column_index in [0, 3, 4, 5, 6]:
+        for paragraph in items_table.rows[0].cells[column_index].paragraphs:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     if len(items_table.rows) < 3:
         raise ValueError("Bảng hàng hóa trong template.docx không đúng cấu trúc mong đợi")
@@ -642,8 +666,8 @@ def export_invoice_docx(invoice: dict, items: list[dict], output_dir: Path | Non
         _populate_item_row(items_table.rows[index], index, item)
 
     total_row = items_table.rows[len(items) + 1]
-    _set_cell_text(total_row.cells[0], "Tổng thanh toán")
-    _set_cell_text(total_row.cells[6], format_money(int(invoice.get("total_amount", 0))))
+    _set_cell_text(total_row.cells[0], "Tổng thanh toán", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    _set_cell_text(total_row.cells[6], format_money(int(invoice.get("total_amount", 0))), alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
 
     save_dir = output_dir or EXPORT_DIR
     save_dir.mkdir(parents=True, exist_ok=True)
