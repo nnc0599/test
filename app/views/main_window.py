@@ -258,8 +258,8 @@ class MainWindow(QMainWindow):
         self.order_table.setSelectionBehavior(QTableWidget.SelectRows)
         header = self.order_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Interactive)
-        header.setSectionResizeMode(2, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Fixed)
+        header.setSectionResizeMode(2, QHeaderView.Fixed)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
@@ -1006,26 +1006,29 @@ class MainWindow(QMainWindow):
         self._sync_order_table_widths()
 
     def _sync_order_table_widths(self) -> None:
-        header = getattr(self, "order_table", None)
-        if header is None:
+        if getattr(self, "order_table", None) is None:
             return
 
         viewport_width = self.order_table.viewport().width()
         if viewport_width <= 0:
             return
 
-        reserved_width = (
-            self.order_table.columnWidth(0)
-            + self.order_table.columnWidth(3)
-            + self.order_table.columnWidth(4)
-            + self.order_table.columnWidth(5)
-            + 32
-        )
-        flexible_width = max(360, viewport_width - reserved_width)
-        code_width = max(220, (flexible_width * 2) // 3)
-        name_width = max(160, flexible_width - code_width)
-        self.order_table.setColumnWidth(1, code_width)
+        fixed_widths = [
+            max(48, self.order_table.columnWidth(0)),
+            max(220, self.order_table.columnWidth(1)),
+            max(88, self.order_table.columnWidth(3)),
+            max(120, self.order_table.columnWidth(4)),
+            max(140, self.order_table.columnWidth(5)),
+        ]
+        reserved_width = sum(fixed_widths) + 24
+        name_width = max(220, viewport_width - reserved_width)
+
+        self.order_table.setColumnWidth(0, fixed_widths[0])
+        self.order_table.setColumnWidth(1, fixed_widths[1])
         self.order_table.setColumnWidth(2, name_width)
+        self.order_table.setColumnWidth(3, fixed_widths[2])
+        self.order_table.setColumnWidth(4, fixed_widths[3])
+        self.order_table.setColumnWidth(5, fixed_widths[4])
 
     def _sync_font_by_window_size(self) -> None:
         width_factor = self.width() / 72
