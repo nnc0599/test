@@ -109,7 +109,7 @@ class ProductRepository:
                 )
                 if cursor.rowcount == 0:
                     raise ValueError(
-                        f"San pham {line['product_code']} khong du so luong de xuat kho."
+                        f"Sản phẩm {line['product_code']} không đủ số lượng để xuất kho."
                     )
 
 
@@ -214,7 +214,7 @@ class InvoiceRepository:
                 )
                 if cursor.rowcount == 0:
                     raise ValueError(
-                        f"San pham {line['product_code']} khong du so luong de xuat kho."
+                        f"Sản phẩm {line['product_code']} không đủ số lượng để xuất kho."
                     )
 
             paid_amount = int(payload.get("paid_amount", 0))

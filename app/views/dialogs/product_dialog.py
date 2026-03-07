@@ -26,12 +26,15 @@ class ProductFormDialog(QDialog):
 
         self.setModal(True)
         self.resize(760, 560)
-        self.setWindowTitle("Them san pham moi" if mode == "add" else "Sua thong tin san pham")
+        self.setWindowTitle("Thêm sản phẩm mới" if mode == "add" else "Sửa thông tin sản phẩm")
 
         self.code_edit = QLineEdit()
+        self.code_edit.setPlaceholderText("Ví dụ: SP003")
         self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("Nhập tên sản phẩm")
         self.unit_edit = QLineEdit()
-        self.updated_at_value = QLabel("Tu dong lay thoi gian hien tai")
+        self.unit_edit.setPlaceholderText("Ví dụ: cái, hộp, bộ")
+        self.updated_at_value = QLabel("Tự động lấy thời gian hiện tại")
 
         self.quantity_spin = QSpinBox()
         self.quantity_spin.setRange(0, 1_000_000_000)
@@ -40,37 +43,37 @@ class ProductFormDialog(QDialog):
         self.price_spin.setRange(0, 2_000_000_000)
 
         self.description_edit = QPlainTextEdit()
-        self.description_edit.setPlaceholderText("Nhap mo ta chi tiet")
+        self.description_edit.setPlaceholderText("Nhập mô tả chi tiết")
 
         self.note_edit = QPlainTextEdit()
-        self.note_edit.setPlaceholderText("Vi du: Ngoc Chung - nhap 16 tam pin moi")
-        self.note_label = QLabel("Ghi chu")
+        self.note_edit.setPlaceholderText("Ví dụ: Ngọc Chung - nhập 16 tấm pin mới")
+        self.note_label = QLabel("Ghi chú")
         self.note_label.setStyleSheet("color: #D62828; font-weight: 700;")
 
         top_grid = QGridLayout()
-        top_grid.addWidget(QLabel("Ma san pham"), 0, 0)
+        top_grid.addWidget(QLabel("Mã sản phẩm"), 0, 0)
         top_grid.addWidget(self.code_edit, 0, 1)
-        top_grid.addWidget(QLabel("Ten san pham"), 0, 2)
+        top_grid.addWidget(QLabel("Tên sản phẩm"), 0, 2)
         top_grid.addWidget(self.name_edit, 0, 3)
 
-        top_grid.addWidget(QLabel("Don vi tinh"), 1, 0)
+        top_grid.addWidget(QLabel("Đơn vị tính"), 1, 0)
         top_grid.addWidget(self.unit_edit, 1, 1)
-        top_grid.addWidget(QLabel("So luong"), 1, 2)
+        top_grid.addWidget(QLabel("Số lượng"), 1, 2)
         top_grid.addWidget(self.quantity_spin, 1, 3)
 
-        top_grid.addWidget(QLabel("Gia ban"), 2, 0)
+        top_grid.addWidget(QLabel("Giá bán"), 2, 0)
         top_grid.addWidget(self.price_spin, 2, 1)
-        top_grid.addWidget(QLabel("Ngay cap nhat"), 2, 2)
+        top_grid.addWidget(QLabel("Ngày cập nhật"), 2, 2)
         top_grid.addWidget(self.updated_at_value, 2, 3)
 
-        product_box = QGroupBox("Thong tin san pham")
+        product_box = QGroupBox("Thông tin sản phẩm")
         product_box.setLayout(top_grid)
 
-        description_box = QGroupBox("Mo ta chi tiet")
+        description_box = QGroupBox("Mô tả chi tiết")
         description_layout = QVBoxLayout(description_box)
         description_layout.addWidget(self.description_edit)
 
-        note_box = QGroupBox("Thong tin cap nhat")
+        note_box = QGroupBox("Thông tin cập nhật")
         note_layout = QFormLayout(note_box)
         note_layout.addRow(self.note_label, self.note_edit)
 
@@ -82,6 +85,7 @@ class ProductFormDialog(QDialog):
         self.cancel_button = self.buttons.button(QDialogButtonBox.Cancel)
         self.ok_button.setText("OK")
         self.cancel_button.setText("CANCEL")
+        self.ok_button.setDefault(True)
         self.buttons.accepted.connect(self._validate_before_accept)
         self.buttons.rejected.connect(self.reject)
 
@@ -108,6 +112,9 @@ class ProductFormDialog(QDialog):
         if self.mode == "edit":
             self.code_edit.setReadOnly(True)
 
+        if self.mode == "add":
+            self.code_edit.setFocus()
+
     def _bind_rules(self) -> None:
         if self.mode == "edit":
             self.ok_button.setEnabled(bool(self.note_edit.toPlainText().strip()))
@@ -117,16 +124,16 @@ class ProductFormDialog(QDialog):
 
     def _validate_before_accept(self) -> None:
         if not self.code_edit.text().strip():
-            QMessageBox.warning(self, "Du lieu thieu", "Ban phai nhap ma san pham")
+            QMessageBox.warning(self, "Thiếu dữ liệu", "Bạn phải nhập mã sản phẩm")
             return
         if not self.name_edit.text().strip():
-            QMessageBox.warning(self, "Du lieu thieu", "Ban phai nhap ten san pham")
+            QMessageBox.warning(self, "Thiếu dữ liệu", "Bạn phải nhập tên sản phẩm")
             return
         if self.mode == "edit" and not self.note_edit.toPlainText().strip():
             QMessageBox.warning(
                 self,
-                "Thieu ghi chu",
-                "Khong the cap nhat neu khong nhap ghi chu.",
+                "Thiếu ghi chú",
+                "Không thể cập nhật nếu không nhập ghi chú.",
             )
             return
         self.accept()

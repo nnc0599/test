@@ -20,27 +20,27 @@ def format_money(value: int) -> str:
 class InvoiceDetailDialog(QDialog):
     def __init__(self, detail: dict, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Chi tiet hoa don")
+        self.setWindowTitle("Chi tiết hóa đơn")
         self.setModal(True)
         self.resize(980, 720)
 
         invoice = detail["invoice"]
         items = detail["items"]
 
-        header_box = QGroupBox("Thong tin hoa don")
+        header_box = QGroupBox("Thông tin hóa đơn")
         header_form = QFormLayout(header_box)
-        header_form.addRow("So hoa don", QLabel(invoice["invoice_no"]))
-        header_form.addRow("Ngay tao", QLabel(invoice["created_at"]))
-        header_form.addRow("Ten khach hang", QLabel(invoice["customer_name"]))
-        header_form.addRow("So dien thoai", QLabel(invoice.get("phone", "")))
-        header_form.addRow("Dia chi", QLabel(invoice.get("address", "")))
-        header_form.addRow("Tong so tien", QLabel(format_money(invoice["total_amount"])))
+        header_form.addRow("Số hóa đơn", QLabel(invoice["invoice_no"]))
+        header_form.addRow("Ngày tạo", QLabel(invoice["created_at"]))
+        header_form.addRow("Tên khách hàng", QLabel(invoice["customer_name"]))
+        header_form.addRow("Số điện thoại", QLabel(invoice.get("phone", "")))
+        header_form.addRow("Địa chỉ", QLabel(invoice.get("address", "")))
+        header_form.addRow("Tổng số tiền", QLabel(format_money(invoice["total_amount"])))
 
-        items_box = QGroupBox("Danh sach san pham")
+        items_box = QGroupBox("Danh sách sản phẩm")
         items_layout = QVBoxLayout(items_box)
         self.items_table = QTableWidget(len(items), 5)
         self.items_table.setHorizontalHeaderLabels(
-            ["Ma san pham", "Ten san pham", "So luong", "Don gia", "Thanh tien"]
+            ["Mã sản phẩm", "Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền"]
         )
         self.items_table.verticalHeader().setVisible(False)
         self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -64,7 +64,7 @@ class InvoiceDetailDialog(QDialog):
 
         items_layout.addWidget(self.items_table)
 
-        close_btn = QPushButton("Dong")
+        close_btn = QPushButton("Đóng")
         close_btn.clicked.connect(self.accept)
 
         root = QVBoxLayout(self)

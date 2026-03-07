@@ -29,9 +29,9 @@ class OrderController:
 
     def create_invoice(self, customer_data: dict, invoice_data: dict, lines: list[dict]) -> None:
         if not lines:
-            raise ValueError("Hoa don phai co it nhat 1 hang hoa")
+            raise ValueError("Hóa đơn phải có ít nhất 1 hàng hóa")
         if not customer_data.get("full_name", "").strip():
-            raise ValueError("Ho ten khach hang khong duoc de trong")
+            raise ValueError("Họ tên khách hàng không được để trống")
 
         created_at = invoice_data.get("created_at") or now_iso_utc7()
 

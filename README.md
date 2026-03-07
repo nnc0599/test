@@ -1,30 +1,29 @@
-# Sales Desktop App (PySide6 + SQLite)
+# Phần Mềm Bán Hàng (PySide6 + SQLite)
 
-Ung dung ban hang desktop viet bang Python + PySide6, theo mo hinh MVC, su dung SQLite lam co so du lieu.
+Ứng dụng bán hàng desktop viết bằng Python + PySide6, theo mô hình MVC, sử dụng SQLite làm cơ sở dữ liệu.
 
-## Tinh nang chinh
+## Tính năng chính
 
-- SQLite schema day du cho:
-	- San pham
-	- Khach hang
-	- Hoa don ban hang + danh sach hang hoa
-	- Thanh toan
-- Giao dien QT 1920x1080 (co gian), font `Times New Roman`, chu toi thieu 15px va tu dong phong to/thu nho theo kich thuoc cua cua so.
-- 3 muc lon chia deu theo chieu ngang:
-	- `Len don hang`
-	- `San pham`
-	- `Bao cao`
-- Hieu ung hover, animation chuyen tab, giao dien sang toi khi tro chuot.
-- Dialog Them/Sua/Xoa san pham co xac thuc mat khau (`12345678`).
-- Quy tac bat buoc ghi chu khi sua san pham (khong ghi chu thi khong bam duoc `OK`).
-- Tab Bao cao doanh thu theo ngay/thang.
-- Tab Bao cao bo sung bang khach hang da luu va danh sach hoa don, co nut xem chi tiet tung hoa don.
-- Mui gio su dung UTC+7.
-- Database san pham gom: ma san pham, ten san pham, don vi tinh, so luong, gia ban, ngay cap nhat, mo ta chi tiet, ghi chu.
-- Database khach hang gom: ho ten, so dien thoai, dia chi, ghi chu.
-- Database hoa don gom: so hoa don, ngay tao, ten khach hang, so dien thoai, dia chi, tong so tien.
+- SQLite schema đầy đủ cho:
+	- Sản phẩm
+	- Khách hàng
+	- Hóa đơn bán hàng + danh sách hàng hóa
+	- Thanh toán
+- Giao diện Qt 1920x1080, có thể kéo giãn, font toàn bộ là `Times New Roman`, cỡ chữ tự co giãn theo kích thước cửa sổ.
+- 3 mục lớn chia đều theo chiều ngang:
+	- `Lên đơn hàng`
+	- `Sản phẩm`
+	- `Báo cáo`
+- Có hiệu ứng hover, animation chuyển tab, giao diện sáng, rõ ràng.
+- Dialog Thêm/Sửa/Xóa sản phẩm có xác thực mật khẩu (`12345678`).
+- Bắt buộc nhập ghi chú khi sửa sản phẩm, nếu để trống thì nút `OK` bị vô hiệu hóa.
+- Tab Báo cáo có thống kê doanh thu theo ngày/tháng, danh sách khách hàng đã lưu và danh sách hóa đơn có thể xem chi tiết.
+- Múi giờ sử dụng UTC+7.
+- Database sản phẩm gồm: mã sản phẩm, tên sản phẩm, đơn vị tính, số lượng, giá bán, ngày cập nhật, mô tả chi tiết, ghi chú.
+- Database khách hàng gồm: họ tên, số điện thoại, địa chỉ, ghi chú.
+- Database hóa đơn gồm: số hóa đơn, ngày tạo, tên khách hàng, số điện thoại, địa chỉ, tổng số tiền.
 
-## Cau truc thu muc
+## Cấu trúc thư mục
 
 ```text
 .
@@ -50,12 +49,12 @@ Ung dung ban hang desktop viet bang Python + PySide6, theo mo hinh MVC, su dung 
 |       |   `-- product_dialog.py
 |       `-- main_window.py
 |-- data
-|   `-- sales_app.db (tu tao khi chay)
+|   `-- sales_app.db (tự tạo khi chạy)
 |-- requirements.txt
 `-- run.py
 ```
 
-## Cai dat
+## Cài đặt
 
 ```bash
 python3 -m venv .venv
@@ -63,34 +62,34 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Chay chuong trinh
+## Chạy chương trình
 
 ```bash
 python run.py
 ```
 
-Tai man hinh `San pham`:
+Tại màn hình `Sản phẩm`:
 
-- `Them san pham`: mo form them moi, ngay cap nhat duoc gan tu dong theo UTC+7.
-- `Sua thong tin`: chi bat khi da chon san pham; bat buoc nhap `Ghi chu`, neu de trong thi nut `OK` bi vo hieu hoa.
-- `Xoa san pham`: can chon san pham, xac nhan xoa va nhap lai mat khau them mot lan nua.
+- `Thêm sản phẩm`: mở form thêm mới, ngày cập nhật được gán tự động theo UTC+7.
+- `Sửa thông tin`: chỉ bật khi đã chọn sản phẩm; bắt buộc nhập `Ghi chú`, nếu để trống thì nút `OK` bị vô hiệu hóa.
+- `Xóa sản phẩm`: cần chọn sản phẩm, xác nhận xóa và nhập lại mật khẩu thêm một lần nữa.
 
-## Chay GUI trong Codespaces
+## Chạy GUI trong Codespaces
 
-Neu mo repo trong GitHub Codespaces, app PySide6 khong the dung X11 cua may host truc tiep. Repo nay co script de chay GUI qua trinh duyet bang Xvfb + noVNC:
+Nếu mở repo trong GitHub Codespaces, app PySide6 không thể dùng X11 của máy host trực tiếp. Repo này có script để chạy GUI qua trình duyệt bằng Xvfb + noVNC:
 
 ```bash
 chmod +x scripts/run_codespaces_gui.sh
 ./scripts/run_codespaces_gui.sh start
 ```
 
-Script se in ra URL dang:
+Script sẽ in ra URL dạng:
 
 ```text
 https://<codespace-name>-6080.app.github.dev/vnc.html?autoconnect=1&resize=scale
 ```
 
-Lenh bo sung:
+Lệnh bổ sung:
 
 ```bash
 ./scripts/run_codespaces_gui.sh status
@@ -98,16 +97,16 @@ Lenh bo sung:
 ./scripts/run_codespaces_gui.sh restart
 ```
 
-## Mat khau quan tri mac dinh
+## Mật khẩu quản trị mặc định
 
 - `12345678`
 
-## Ghi chu ky thuat
+## Ghi chú kỹ thuật
 
-- Du lieu ngay gio duoc lay theo UTC+7 trong toan bo app.
-- Tong tien hoa don = tong tien hang + phi ship.
-- Khi xuat hoa don, app tu dong:
-	- Luu/Cap nhat thong tin khach hang
-	- Luu hoa don + chi tiet hoa don
-	- Tru ton kho
-	- Tao ban ghi thanh toan
+- Dữ liệu ngày giờ được lấy theo UTC+7 trong toàn bộ app.
+- Tổng tiền hóa đơn bằng tổng tiền hàng trong đơn hiện tại.
+- Khi xuất hóa đơn, app tự động:
+	- Lưu/Cập nhật thông tin khách hàng
+	- Lưu hóa đơn + chi tiết hóa đơn
+	- Trừ tồn kho
+	- Tạo bản ghi thanh toán

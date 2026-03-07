@@ -120,36 +120,50 @@ def init_schema() -> None:
 
 def seed_sample_products() -> None:
     with get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) AS c FROM products").fetchone()["c"]
-        if count > 0:
-            return
         now = now_iso_utc7()
-        conn.executemany(
-            """
-            INSERT INTO products (
-                product_code, name, unit, quantity, sale_price, updated_at, description, note
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    "SP001",
-                    "Pin Nang Luong 550W",
-                    "tam",
-                    200,
-                    3500000,
-                    now,
-                    "Pin nang luong mat troi hieu suat cao, phu hop he thong dan dung.",
-                    "Khoi tao mau",
-                ),
-                (
-                    "SP002",
-                    "Bien Tan Hybrid 5kW",
-                    "bo",
-                    45,
-                    9800000,
-                    now,
-                    "Bien tan hybrid ho tro luu tru, giam hao phi dien nang.",
-                    "Khoi tao mau",
-                ),
-            ],
-        )
+        sample_rows = [
+            (
+                "SP001",
+                "Pin Năng Lượng 550W",
+                "tấm",
+                200,
+                3500000,
+                now,
+                "Pin năng lượng mặt trời hiệu suất cao, phù hợp cho hệ thống dân dụng.",
+                "Khởi tạo mẫu",
+            ),
+            (
+                "SP002",
+                "Biến Tần Hybrid 5kW",
+                "bộ",
+                45,
+                9800000,
+                now,
+                "Biến tần hybrid hỗ trợ lưu trữ, giảm hao phí điện năng.",
+                "Khởi tạo mẫu",
+            ),
+        ]
+
+        for row in sample_rows:
+            exists = conn.execute(
+                "SELECT product_code FROM products WHERE product_code = ?",
+                (row[0],),
+            ).fetchone()
+            if exists:
+                conn.execute(
+                    """
+                    UPDATE products
+                    SET name = ?, unit = ?, quantity = ?, sale_price = ?, updated_at = ?, description = ?, note = ?
+                    WHERE product_code = ?
+                    """,
+                    (row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[0]),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO products (
+                        product_code, name, unit, quantity, sale_price, updated_at, description, note
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    row,
+                )

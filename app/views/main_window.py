@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
         self.invoice_lines: list[dict[str, Any]] = []
         self.selected_product_code: str | None = None
 
-        self.setWindowTitle("Phan mem ban hang")
+        self.setWindowTitle("Phần mềm bán hàng")
         self.resize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
         self.setMinimumSize(900, 600)
 
@@ -136,7 +136,7 @@ class MainWindow(QMainWindow):
 
         self.menu_buttons: list[QPushButton] = []
         top_menu = QHBoxLayout()
-        for idx, title in enumerate(["Len don hang", "San pham", "Bao cao"]):
+        for idx, title in enumerate(["Lên đơn hàng", "Sản phẩm", "Báo cáo"]):
             btn = QPushButton(title)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             btn.setMinimumHeight(56)
@@ -164,7 +164,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setSpacing(10)
 
-        customer_box = QGroupBox("Thong tin len don")
+        customer_box = QGroupBox("Thông tin lên đơn")
         customer_grid = QGridLayout(customer_box)
 
         self.order_name = QLineEdit()
@@ -174,31 +174,34 @@ class MainWindow(QMainWindow):
 
         self.order_address = QLineEdit()
 
-        customer_grid.addWidget(QLabel("Nhap ho ten"), 0, 0)
+        customer_grid.addWidget(QLabel("Nhập họ tên"), 0, 0)
         customer_grid.addWidget(self.order_name, 0, 1)
-        customer_grid.addWidget(QLabel("So dien thoai"), 0, 2)
+        customer_grid.addWidget(QLabel("Số điện thoại"), 0, 2)
         customer_grid.addWidget(self.order_phone, 0, 3)
-        customer_grid.addWidget(QLabel("Ngay tao don"), 0, 4)
+        customer_grid.addWidget(QLabel("Ngày tạo đơn"), 0, 4)
         customer_grid.addWidget(self.order_created_at, 0, 5)
 
-        customer_grid.addWidget(QLabel("Dia chi"), 1, 0)
+        customer_grid.addWidget(QLabel("Địa chỉ"), 1, 0)
         customer_grid.addWidget(self.order_address, 1, 1, 1, 5)
 
         layout.addWidget(customer_box)
 
-        add_item_box = QGroupBox("Them hang hoa")
+        add_item_box = QGroupBox("Thêm hàng hóa")
         add_grid = QGridLayout(add_item_box)
 
         self.search_product_edit = QLineEdit()
-        self.search_product_edit.setPlaceholderText("Tim kiem san pham")
+        self.search_product_edit.setPlaceholderText("Tìm kiếm sản phẩm")
         self.completer_model = QStringListModel([])
         self.product_completer = QCompleter(self.completer_model)
         self.product_completer.setCaseSensitivity(Qt.CaseInsensitive)
         self.product_completer.setFilterMode(Qt.MatchContains)
         self.search_product_edit.setCompleter(self.product_completer)
 
-        self.view_desc_btn = QPushButton("Xem them")
+        self.view_desc_btn = QPushButton("Xem thêm")
         self.view_desc_btn.clicked.connect(self._show_selected_product_desc)
+
+        self.select_product_btn = QPushButton("Chọn sản phẩm")
+        self.select_product_btn.clicked.connect(self._pick_product_from_input)
 
         self.order_qty_spin = QSpinBox()
         self.order_qty_spin.setRange(1, 1_000_000_000)
@@ -206,23 +209,24 @@ class MainWindow(QMainWindow):
         self.order_price_spin = QSpinBox()
         self.order_price_spin.setRange(0, 2_000_000_000)
 
-        self.add_line_btn = QPushButton("Them vao danh sach")
+        self.add_line_btn = QPushButton("Thêm vào danh sách")
         self.add_line_btn.clicked.connect(self._append_invoice_line)
 
-        add_grid.addWidget(QLabel("Tim kiem san pham"), 0, 0)
+        add_grid.addWidget(QLabel("Tìm kiếm sản phẩm"), 0, 0)
         add_grid.addWidget(self.search_product_edit, 0, 1, 1, 2)
-        add_grid.addWidget(self.view_desc_btn, 0, 3)
-        add_grid.addWidget(QLabel("So luong"), 0, 4)
-        add_grid.addWidget(self.order_qty_spin, 0, 5)
-        add_grid.addWidget(QLabel("Don gia"), 0, 6)
-        add_grid.addWidget(self.order_price_spin, 0, 7)
-        add_grid.addWidget(self.add_line_btn, 0, 8)
+        add_grid.addWidget(self.select_product_btn, 0, 3)
+        add_grid.addWidget(self.view_desc_btn, 0, 4)
+        add_grid.addWidget(QLabel("Số lượng"), 0, 5)
+        add_grid.addWidget(self.order_qty_spin, 0, 6)
+        add_grid.addWidget(QLabel("Đơn giá"), 0, 7)
+        add_grid.addWidget(self.order_price_spin, 0, 8)
+        add_grid.addWidget(self.add_line_btn, 0, 9)
 
         layout.addWidget(add_item_box)
 
         self.order_table = QTableWidget(0, 6)
         self.order_table.setHorizontalHeaderLabels(
-            ["STT", "Ma hang", "Ten san pham", "So luong", "Don gia", "Thanh tien"]
+            ["STT", "Mã hàng", "Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền"]
         )
         self.order_table.verticalHeader().setVisible(False)
         self.order_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -236,18 +240,18 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         layout.addWidget(self.order_table)
 
-        payment_box = QGroupBox("Tong tien hoa don")
+        payment_box = QGroupBox("Tổng tiền hóa đơn")
         payment_form = QFormLayout(payment_box)
 
         self.total_goods_label = QLabel("0")
         self.total_all_label = QLabel("0")
 
-        payment_form.addRow("Tien hang", self.total_goods_label)
-        payment_form.addRow("Tong so tien", self.total_all_label)
+        payment_form.addRow("Tiền hàng", self.total_goods_label)
+        payment_form.addRow("Tổng số tiền", self.total_all_label)
 
         layout.addWidget(payment_box)
 
-        self.export_btn = QPushButton("XUAT HOA DON")
+        self.export_btn = QPushButton("XUẤT HÓA ĐƠN")
         self.export_btn.setMinimumHeight(58)
         self.export_btn.setStyleSheet(
             "QPushButton { background: #0EA5E9; color: white; font-weight: 800; }"
@@ -259,6 +263,7 @@ class MainWindow(QMainWindow):
 
         self.search_product_edit.textChanged.connect(self._refresh_product_completer)
         self.product_completer.activated.connect(self._on_completer_activated)
+        self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
 
         return page
 
@@ -268,9 +273,9 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         actions = QHBoxLayout()
-        self.btn_add_product = QPushButton("Them san pham")
-        self.btn_edit_product = QPushButton("Sua thong tin")
-        self.btn_delete_product = QPushButton("Xoa san pham")
+        self.btn_add_product = QPushButton("Thêm sản phẩm")
+        self.btn_edit_product = QPushButton("Sửa thông tin")
+        self.btn_delete_product = QPushButton("Xóa sản phẩm")
 
         self.btn_add_product.setStyleSheet(
             "QPushButton { background: #22C55E; color: #0B1A10; }"
@@ -296,7 +301,7 @@ class MainWindow(QMainWindow):
 
         self.product_table = QTableWidget(0, 6)
         self.product_table.setHorizontalHeaderLabels(
-            ["Ma san pham", "Ten san pham", "So luong", "Gia ban", "Mo ta", "Ngay cap nhat"]
+            ["Mã sản phẩm", "Tên sản phẩm", "Số lượng", "Giá bán", "Mô tả", "Ngày cập nhật"]
         )
         self.product_table.verticalHeader().setVisible(False)
         self.product_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -328,8 +333,8 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         cards = QHBoxLayout()
-        self.today_card = self._build_card("Doanh thu hom nay")
-        self.month_card = self._build_card("Doanh thu thang")
+        self.today_card = self._build_card("Doanh thu hôm nay")
+        self.month_card = self._build_card("Doanh thu tháng")
         cards.addWidget(self.today_card)
         cards.addWidget(self.month_card)
         layout.addLayout(cards)
@@ -337,24 +342,24 @@ class MainWindow(QMainWindow):
         panel = QHBoxLayout()
 
         self.day_table = QTableWidget(0, 2)
-        self.day_table.setHorizontalHeaderLabels(["Ngay", "Doanh thu"])
+        self.day_table.setHorizontalHeaderLabels(["Ngày", "Doanh thu"])
         self.day_table.verticalHeader().setVisible(False)
         self.day_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.day_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.day_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
 
         self.month_table = QTableWidget(0, 2)
-        self.month_table.setHorizontalHeaderLabels(["Thang", "Doanh thu"])
+        self.month_table.setHorizontalHeaderLabels(["Tháng", "Doanh thu"])
         self.month_table.verticalHeader().setVisible(False)
         self.month_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.month_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.month_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
 
-        day_group = QGroupBox("Thong ke theo ngay")
+        day_group = QGroupBox("Thống kê theo ngày")
         day_layout = QVBoxLayout(day_group)
         day_layout.addWidget(self.day_table)
 
-        month_group = QGroupBox("Thong ke theo thang")
+        month_group = QGroupBox("Thống kê theo tháng")
         month_layout = QVBoxLayout(month_group)
         month_layout.addWidget(self.month_table)
 
@@ -362,16 +367,16 @@ class MainWindow(QMainWindow):
         panel.addWidget(month_group)
         layout.addLayout(panel)
 
-        refresh_btn = QPushButton("Lam moi bao cao")
+        refresh_btn = QPushButton("Làm mới báo cáo")
         refresh_btn.clicked.connect(self.refresh_report)
         layout.addWidget(refresh_btn)
 
         management_panel = QHBoxLayout()
 
-        customer_group = QGroupBox("Khach hang da luu")
+        customer_group = QGroupBox("Khách hàng đã lưu")
         customer_layout = QVBoxLayout(customer_group)
         self.customer_table = QTableWidget(0, 4)
-        self.customer_table.setHorizontalHeaderLabels(["Ho ten", "So dien thoai", "Dia chi", "Ghi chu"])
+        self.customer_table.setHorizontalHeaderLabels(["Họ tên", "Số điện thoại", "Địa chỉ", "Ghi chú"])
         self.customer_table.verticalHeader().setVisible(False)
         self.customer_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.customer_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -382,11 +387,11 @@ class MainWindow(QMainWindow):
         customer_header.setSectionResizeMode(3, QHeaderView.Stretch)
         customer_layout.addWidget(self.customer_table)
 
-        invoice_group = QGroupBox("Danh sach hoa don")
+        invoice_group = QGroupBox("Danh sách hóa đơn")
         invoice_layout = QVBoxLayout(invoice_group)
         self.invoice_table = QTableWidget(0, 7)
         self.invoice_table.setHorizontalHeaderLabels(
-            ["So hoa don", "Ngay tao", "Khach hang", "So dien thoai", "Dia chi", "Tong tien", "So dong"]
+            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Địa chỉ", "Tổng tiền", "Số dòng"]
         )
         self.invoice_table.verticalHeader().setVisible(False)
         self.invoice_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -401,7 +406,7 @@ class MainWindow(QMainWindow):
         invoice_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         invoice_layout.addWidget(self.invoice_table)
 
-        self.view_invoice_detail_btn = QPushButton("Xem chi tiet hoa don")
+        self.view_invoice_detail_btn = QPushButton("Xem chi tiết hóa đơn")
         self.view_invoice_detail_btn.setEnabled(False)
         self.view_invoice_detail_btn.clicked.connect(self._show_selected_invoice_detail)
         self.invoice_table.itemSelectionChanged.connect(self._sync_invoice_action_state)
@@ -490,9 +495,43 @@ class MainWindow(QMainWindow):
         self.order_qty_spin.setMaximum(max(stock, 1))
         self.order_qty_spin.setToolTip(f"So luong ton: {stock}")
 
+    def _pick_product_from_input(self) -> bool:
+        raw_text = self.search_product_edit.text().strip()
+        if not raw_text:
+            QMessageBox.information(self, "Thông báo", "Hãy nhập mã hoặc tên sản phẩm")
+            return False
+
+        product_code = raw_text.split("|")[0].strip()
+        if product_code in self.product_map:
+            self._set_selected_product(product_code)
+            return True
+
+        matches = self.order_controller.search_products(raw_text)
+        if len(matches) == 1:
+            self.product_map[matches[0]["product_code"]] = matches[0]
+            self._set_selected_product(matches[0]["product_code"])
+            return True
+
+        normalized = raw_text.casefold()
+        for product in matches:
+            if product["product_code"].casefold() == normalized or product["name"].casefold() == normalized:
+                self.product_map[product["product_code"]] = product
+                self._set_selected_product(product["product_code"])
+                return True
+
+        if len(matches) > 1:
+            QMessageBox.information(
+                self,
+                "Cần chọn rõ hơn",
+                "Có nhiều sản phẩm phù hợp. Hãy chọn trong gợi ý hoặc nhập đầy đủ mã sản phẩm.",
+            )
+            return False
+
+        QMessageBox.warning(self, "Không tìm thấy", "Không tìm thấy sản phẩm phù hợp")
+        return False
+
     def _show_selected_product_desc(self) -> None:
-        if not self.selected_product_code:
-            QMessageBox.information(self, "Thong bao", "Chua chon san pham")
+        if not self.selected_product_code and not self._pick_product_from_input():
             return
         product = self.product_map.get(self.selected_product_code)
         if not product:
@@ -506,8 +545,7 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _append_invoice_line(self) -> None:
-        if not self.selected_product_code:
-            QMessageBox.warning(self, "Chua chon", "Ban can chon san pham truoc")
+        if not self.selected_product_code and not self._pick_product_from_input():
             return
         product = self.product_map.get(self.selected_product_code)
         if not product:
@@ -517,7 +555,7 @@ class MainWindow(QMainWindow):
         unit_price = self.order_price_spin.value()
         stock = int(product["quantity"])
         if qty > stock:
-            QMessageBox.warning(self, "Vuot ton kho", "So luong nhap vuot qua ton kho hien tai")
+            QMessageBox.warning(self, "Vượt tồn kho", "Số lượng nhập vượt quá tồn kho hiện tại")
             return
 
         line = {
@@ -562,7 +600,7 @@ class MainWindow(QMainWindow):
                 "full_name": self.order_name.text().strip(),
                 "phone": self.order_phone.text().strip(),
                 "address": self.order_address.text().strip(),
-                "note": "Tu dong cap nhat tu len don",
+                "note": "Tự động cập nhật từ lên đơn",
             }
             invoice_data = {
                 "invoice_no": invoice_no,
@@ -573,7 +611,7 @@ class MainWindow(QMainWindow):
             }
             self.order_controller.create_invoice(customer_data, invoice_data, self.invoice_lines)
 
-            QMessageBox.information(self, "Thanh cong", f"Da xuat hoa don {invoice_no}")
+            QMessageBox.information(self, "Thành công", f"Đã xuất hóa đơn {invoice_no}")
             self.invoice_lines.clear()
             self._render_invoice_lines()
             self._update_invoice_totals()
@@ -582,10 +620,12 @@ class MainWindow(QMainWindow):
             self.order_address.clear()
             self.search_product_edit.clear()
             self.selected_product_code = None
+            self.order_price_spin.setValue(0)
+            self.order_qty_spin.setValue(1)
             self.refresh_products()
             self.refresh_report()
         except Exception as exc:  # pragma: no cover - dialog feedback
-            QMessageBox.critical(self, "Loi", str(exc))
+            QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_products(self) -> None:
         products = self.product_controller.list_products()
@@ -598,12 +638,12 @@ class MainWindow(QMainWindow):
                 product["name"],
                 str(product["quantity"]),
                 format_money(product["sale_price"]),
-                "Xem them",
+                "Xem thêm",
                 product["updated_at"],
             ]
             for col, value in enumerate(base_values):
                 if col == 4:
-                    btn = QPushButton("Xem them")
+                    btn = QPushButton("Xem thêm")
                     btn.clicked.connect(
                         lambda checked=False, p=product: self._show_product_desc_direct(p)
                     )
@@ -634,7 +674,7 @@ class MainWindow(QMainWindow):
         self.btn_delete_product.setEnabled(has_selection)
 
     def _on_add_product(self) -> None:
-        if not PasswordDialog.verify(self, "Xac thuc them san pham"):
+        if not PasswordDialog.verify(self, "Xác thực thêm sản phẩm"):
             return
         dlg = ProductFormDialog(self, mode="add")
         if dlg.exec() != ProductFormDialog.Accepted:
@@ -642,20 +682,20 @@ class MainWindow(QMainWindow):
         try:
             self.product_controller.create_product(dlg.payload())
             self.refresh_products()
-            QMessageBox.information(self, "Thanh cong", "Da them san pham moi")
+            QMessageBox.information(self, "Thành công", "Đã thêm sản phẩm mới")
         except Exception as exc:
-            QMessageBox.critical(self, "Loi", str(exc))
+            QMessageBox.critical(self, "Lỗi", str(exc))
 
     def _on_edit_product(self) -> None:
         code = self._selected_product_code()
         if not code:
             return
-        if not PasswordDialog.verify(self, "Xac thuc sua thong tin"):
+        if not PasswordDialog.verify(self, "Xác thực sửa thông tin"):
             return
 
         product = self.product_map.get(code)
         if not product:
-            QMessageBox.warning(self, "Khong tim thay", "San pham da chon khong ton tai")
+            QMessageBox.warning(self, "Không tìm thấy", "Sản phẩm đã chọn không tồn tại")
             return
 
         dlg = ProductFormDialog(self, mode="edit", initial=product)
@@ -665,35 +705,35 @@ class MainWindow(QMainWindow):
         try:
             self.product_controller.update_product(code, dlg.payload())
             self.refresh_products()
-            QMessageBox.information(self, "Thanh cong", "Da cap nhat san pham")
+            QMessageBox.information(self, "Thành công", "Đã cập nhật sản phẩm")
         except Exception as exc:
-            QMessageBox.critical(self, "Loi", str(exc))
+            QMessageBox.critical(self, "Lỗi", str(exc))
 
     def _on_delete_product(self) -> None:
         code = self._selected_product_code()
         if not code:
             return
 
-        if not PasswordDialog.verify(self, "Xac thuc xoa san pham"):
+        if not PasswordDialog.verify(self, "Xác thực xóa sản phẩm"):
             return
 
         ok = QMessageBox.question(
             self,
-            "Xac nhan xoa",
-            f"Ban co chac chan muon xoa san pham ma {code}?",
+            "Xác nhận xóa",
+            f"Bạn có chắc chắn muốn xóa sản phẩm mã {code}?",
         )
         if ok != QMessageBox.Yes:
             return
 
-        if not PasswordDialog.verify(self, "Nhap lai mat khau de xac nhan xoa"):
+        if not PasswordDialog.verify(self, "Nhập lại mật khẩu để xác nhận xóa"):
             return
 
         try:
             self.product_controller.delete_product(code)
             self.refresh_products()
-            QMessageBox.information(self, "Thanh cong", "Da xoa san pham")
+            QMessageBox.information(self, "Thành công", "Đã xóa sản phẩm")
         except Exception as exc:
-            QMessageBox.critical(self, "Loi", str(exc))
+            QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_report(self) -> None:
         summary = self.report_controller.summary()
@@ -759,7 +799,7 @@ class MainWindow(QMainWindow):
             return
         detail = self.order_controller.get_invoice_detail(invoice_no)
         if not detail:
-            QMessageBox.warning(self, "Khong tim thay", "Khong lay duoc chi tiet hoa don")
+            QMessageBox.warning(self, "Không tìm thấy", "Không lấy được chi tiết hóa đơn")
             return
         dialog = InvoiceDetailDialog(detail, self)
         dialog.exec()

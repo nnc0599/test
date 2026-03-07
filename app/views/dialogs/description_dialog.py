@@ -4,17 +4,17 @@ from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QTextEdit, QVBoxLayo
 class DescriptionDialog(QDialog):
     def __init__(self, product_code: str, product_name: str, description: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Mo ta san pham")
+        self.setWindowTitle("Mô tả sản phẩm")
         self.setModal(True)
         self.resize(640, 420)
 
-        title = QLabel(f"Ma san pham: {product_code} | Ten: {product_name}")
+        title = QLabel(f"Mã sản phẩm: {product_code} | Tên: {product_name}")
 
         body = QTextEdit()
         body.setReadOnly(True)
-        body.setPlainText(description or "(Khong co mo ta)")
+        body.setPlainText(description or "(Không có mô tả)")
 
-        close_btn = QPushButton("Dong")
+        close_btn = QPushButton("Đóng")
         close_btn.clicked.connect(self.accept)
 
         root = QVBoxLayout(self)

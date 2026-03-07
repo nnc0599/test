@@ -1,6 +1,6 @@
 from pathlib import Path
 
-APP_NAME = "Sales Desktop App"
+APP_NAME = "Phần Mềm Bán Hàng"
 DEFAULT_ADMIN_PASSWORD = "12345678"
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

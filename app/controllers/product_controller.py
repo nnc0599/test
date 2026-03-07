@@ -15,14 +15,16 @@ class ProductController:
 
     def create_product(self, payload: dict) -> None:
         if not payload.get("product_code", "").strip():
-            raise ValueError("Ma san pham khong duoc de trong")
+            raise ValueError("Mã sản phẩm không được để trống")
         if not payload.get("name", "").strip():
-            raise ValueError("Ten san pham khong duoc de trong")
+            raise ValueError("Tên sản phẩm không được để trống")
+        if self.repo.get_product(payload["product_code"].strip()):
+            raise ValueError("Mã sản phẩm đã tồn tại, vui lòng nhập mã khác")
         self.repo.add_product(payload)
 
     def update_product(self, product_code: str, payload: dict) -> None:
         if not payload.get("note", "").strip():
-            raise ValueError("Ghi chu bat buoc khi sua thong tin san pham")
+            raise ValueError("Ghi chú là bắt buộc khi sửa thông tin sản phẩm")
         self.repo.update_product(product_code, payload)
 
     def delete_product(self, product_code: str) -> None:
