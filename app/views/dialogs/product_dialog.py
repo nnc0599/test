@@ -23,6 +23,7 @@ class ProductFormDialog(QDialog):
         super().__init__(parent)
         self.mode = mode
         self.initial = initial or {}
+        self._payload_cache: dict | None = None
 
         self.setModal(True)
         self.resize(760, 560)
@@ -42,12 +43,12 @@ class ProductFormDialog(QDialog):
         self.price_spin = QSpinBox()
         self.price_spin.setRange(0, 2_000_000_000)
 
-        self.description_edit = QPlainTextEdit()
+        self.description_edit = QPlainTextEdit(self)
         self.description_edit.setPlaceholderText("Nhập mô tả chi tiết")
 
-        self.note_edit = QPlainTextEdit()
+        self.note_edit = QPlainTextEdit(self)
         self.note_edit.setPlaceholderText("Ví dụ: Ngọc Chung - nhập 16 tấm pin mới")
-        self.note_label = QLabel("Ghi chú")
+        self.note_label = QLabel("Ghi chú", self)
         self.note_label.setStyleSheet("color: #D62828; font-weight: 700;")
 
         top_grid = QGridLayout()
@@ -73,8 +74,8 @@ class ProductFormDialog(QDialog):
         description_layout = QVBoxLayout(description_box)
         description_layout.addWidget(self.description_edit)
 
-        note_box = QGroupBox("Thông tin cập nhật")
-        note_layout = QFormLayout(note_box)
+        self.note_box = QGroupBox("Thông tin cập nhật", self)
+        note_layout = QFormLayout(self.note_box)
         note_layout.addRow(self.note_label, self.note_edit)
 
         self.buttons = QDialogButtonBox(
@@ -93,7 +94,7 @@ class ProductFormDialog(QDialog):
         root.addWidget(product_box)
         root.addWidget(description_box)
         if mode == "edit":
-            root.addWidget(note_box)
+            root.addWidget(self.note_box)
         root.addWidget(self.buttons)
 
         self._bind_data()
@@ -117,28 +118,13 @@ class ProductFormDialog(QDialog):
 
     def _bind_rules(self) -> None:
         if self.mode == "edit":
-            self.ok_button.setEnabled(bool(self.note_edit.toPlainText().strip()))
-            self.note_edit.textChanged.connect(
-                lambda: self.ok_button.setEnabled(bool(self.note_edit.toPlainText().strip()))
-            )
+            self._sync_note_requirement()
+            self.note_edit.textChanged.connect(self._sync_note_requirement)
 
-    def _validate_before_accept(self) -> None:
-        if not self.code_edit.text().strip():
-            QMessageBox.warning(self, "Thiếu dữ liệu", "Bạn phải nhập mã sản phẩm")
-            return
-        if not self.name_edit.text().strip():
-            QMessageBox.warning(self, "Thiếu dữ liệu", "Bạn phải nhập tên sản phẩm")
-            return
-        if self.mode == "edit" and not self.note_edit.toPlainText().strip():
-            QMessageBox.warning(
-                self,
-                "Thiếu ghi chú",
-                "Không thể cập nhật nếu không nhập ghi chú.",
-            )
-            return
-        self.accept()
+    def _sync_note_requirement(self) -> None:
+        self.ok_button.setEnabled(bool(self.note_edit.toPlainText().strip()))
 
-    def payload(self) -> dict:
+    def _collect_payload(self) -> dict:
         return {
             "product_code": self.code_edit.text().strip(),
             "name": self.name_edit.text().strip(),
@@ -148,3 +134,25 @@ class ProductFormDialog(QDialog):
             "description": self.description_edit.toPlainText().strip(),
             "note": self.note_edit.toPlainText().strip(),
         }
+
+    def _validate_before_accept(self) -> None:
+        payload = self._collect_payload()
+
+        if not payload["product_code"]:
+            QMessageBox.warning(self, "Thiếu dữ liệu", "Bạn phải nhập mã sản phẩm")
+            return
+        if not payload["name"]:
+            QMessageBox.warning(self, "Thiếu dữ liệu", "Bạn phải nhập tên sản phẩm")
+            return
+        if self.mode == "edit" and not payload["note"]:
+            QMessageBox.warning(
+                self,
+                "Thiếu ghi chú",
+                "Không thể cập nhật nếu không nhập ghi chú.",
+            )
+            return
+        self._payload_cache = payload
+        self.accept()
+
+    def payload(self) -> dict:
+        return dict(self._payload_cache or self._collect_payload())
