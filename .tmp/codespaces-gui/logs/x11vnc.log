@@ -1,0 +1,227 @@
+07/03/2026 09:16:44 passing arg to libvncserver: -rfbport
+07/03/2026 09:16:44 passing arg to libvncserver: 5901
+07/03/2026 09:16:44 x11vnc version: 0.9.16 lastmod: 2019-01-05  pid: 13895
+07/03/2026 09:16:44 Using X display :1
+07/03/2026 09:16:44 rootwin: 0x21f reswin: 0x200001 dpy: 0x7e37e050
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 ------------------ USEFUL INFORMATION ------------------
+07/03/2026 09:16:44 X DAMAGE available on display, using it for polling hints.
+07/03/2026 09:16:44   To disable this behavior use: '-noxdamage'
+07/03/2026 09:16:44 
+07/03/2026 09:16:44   Most compositing window managers like 'compiz' or 'beryl'
+07/03/2026 09:16:44   cause X DAMAGE to fail, and so you may not see any screen
+07/03/2026 09:16:44   updates via VNC.  Either disable 'compiz' (recommended) or
+07/03/2026 09:16:44   supply the x11vnc '-noxdamage' command line option.
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 Wireframing: -wireframe mode is in effect for window moves.
+07/03/2026 09:16:44   If this yields undesired behavior (poor response, painting
+07/03/2026 09:16:44   errors, etc) it may be disabled:
+07/03/2026 09:16:44    - use '-nowf' to disable wireframing completely.
+07/03/2026 09:16:44    - use '-nowcr' to disable the Copy Rectangle after the
+07/03/2026 09:16:44      moved window is released in the new position.
+07/03/2026 09:16:44   Also see the -help entry for tuning parameters.
+07/03/2026 09:16:44   You can press 3 Alt_L's (Left "Alt" key) in a row to 
+07/03/2026 09:16:44   repaint the screen, also see the -fixscreen option for
+07/03/2026 09:16:44   periodic repaints.
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 XFIXES available on display, resetting cursor mode
+07/03/2026 09:16:44   to: '-cursor most'.
+07/03/2026 09:16:44   to disable this behavior use: '-cursor arrow'
+07/03/2026 09:16:44   or '-noxfixes'.
+07/03/2026 09:16:44 using XFIXES for cursor drawing.
+07/03/2026 09:16:44 GrabServer control via XTEST.
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 Scroll Detection: -scrollcopyrect mode is in effect to
+07/03/2026 09:16:44   use RECORD extension to try to detect scrolling windows
+07/03/2026 09:16:44   (induced by either user keystroke or mouse input).
+07/03/2026 09:16:44   If this yields undesired behavior (poor response, painting
+07/03/2026 09:16:44   errors, etc) it may be disabled via: '-noscr'
+07/03/2026 09:16:44   Also see the -help entry for tuning parameters.
+07/03/2026 09:16:44   You can press 3 Alt_L's (Left "Alt" key) in a row to 
+07/03/2026 09:16:44   repaint the screen, also see the -fixscreen option for
+07/03/2026 09:16:44   periodic repaints.
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 XKEYBOARD: number of keysyms per keycode 7 is greater
+07/03/2026 09:16:44   than 4 and 51 keysyms are mapped above 4.
+07/03/2026 09:16:44   Automatically switching to -xkb mode.
+07/03/2026 09:16:44   If this makes the key mapping worse you can
+07/03/2026 09:16:44   disable it with the "-noxkb" option.
+07/03/2026 09:16:44   Also, remember "-remap DEAD" for accenting characters.
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 X FBPM extension not supported.
+Xlib:  extension "DPMS" missing on display ":1".
+07/03/2026 09:16:44 X display is not capable of DPMS.
+07/03/2026 09:16:44 --------------------------------------------------------
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 Default visual ID: 0x21
+07/03/2026 09:16:44 Read initial data from X display into framebuffer.
+07/03/2026 09:16:44 initialize_screen: fb_depth/fb_bpp/fb_Bpl 24/32/5760
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 X display :1 is 32bpp depth=24 true color
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 Listening for VNC connections on TCP port 5901
+07/03/2026 09:16:44 Listening for VNC connections on TCP6 port 5900
+07/03/2026 09:16:44 Listening also on IPv6 port 5901 (socket 11)
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 Xinerama is present and active (e.g. multi-head).
+07/03/2026 09:16:44 Xinerama: number of sub-screens: 1
+07/03/2026 09:16:44 Xinerama: no blackouts needed (only one sub-screen)
+07/03/2026 09:16:44 
+07/03/2026 09:16:44 fb read rate: 730 MB/sec
+07/03/2026 09:16:44 fast read: reset -wait  ms to: 10
+07/03/2026 09:16:44 fast read: reset -defer ms to: 10
+07/03/2026 09:16:44 The X server says there are 10 mouse buttons.
+07/03/2026 09:16:44 screen setup finished.
+07/03/2026 09:16:44 
+
+The VNC desktop is:      codespaces-415856:1
+PORT=5901
+
+******************************************************************************
+Have you tried the x11vnc '-ncache' VNC client-side pixel caching feature yet?
+
+The scheme stores pixel data offscreen on the VNC viewer side for faster
+retrieval.  It should work with any VNC viewer.  Try it by running:
+
+    x11vnc -ncache 10 ...
+
+One can also add -ncache_cr for smooth 'copyrect' window motion.
+More info: http://www.karlrunge.com/x11vnc/faq.html#faq-client-caching
+
+07/03/2026 09:17:05 Got connection from client ::1
+07/03/2026 09:17:05   0 other clients
+07/03/2026 09:17:05 Got 'ws' WebSockets handshake
+07/03/2026 09:17:05 Hixie no longer supported
+07/03/2026 09:17:05 Client ::1 gone
+07/03/2026 09:17:05 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:17:05  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:05 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:17:05  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:05 Got connection from client ::1
+07/03/2026 09:17:05   0 other clients
+07/03/2026 09:17:05 Got 'ws' WebSockets handshake
+07/03/2026 09:17:05 Hixie no longer supported
+07/03/2026 09:17:05 Client ::1 gone
+07/03/2026 09:17:05 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:17:05  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:05 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:17:05  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:05 Got connection from client ::1
+07/03/2026 09:17:05   0 other clients
+07/03/2026 09:17:05 Got 'ws' WebSockets handshake
+07/03/2026 09:17:05 Hixie no longer supported
+07/03/2026 09:17:05 Client ::1 gone
+07/03/2026 09:17:05 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:17:05  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:05 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:17:05  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:06 Got connection from client ::1
+07/03/2026 09:17:06   0 other clients
+07/03/2026 09:17:06 Got 'ws' WebSockets handshake
+07/03/2026 09:17:06 Hixie no longer supported
+07/03/2026 09:17:06 Client ::1 gone
+07/03/2026 09:17:06 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:17:06  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:06 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:17:06  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:09 Got connection from client ::1
+07/03/2026 09:17:09   0 other clients
+07/03/2026 09:17:09 Got 'ws' WebSockets handshake
+07/03/2026 09:17:09 Hixie no longer supported
+07/03/2026 09:17:09 Client ::1 gone
+07/03/2026 09:17:09 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:17:09  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:09 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:17:09  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:09 Got connection from client ::1
+07/03/2026 09:17:09   0 other clients
+07/03/2026 09:17:09 Got 'ws' WebSockets handshake
+07/03/2026 09:17:09 Hixie no longer supported
+07/03/2026 09:17:09 Client ::1 gone
+07/03/2026 09:17:09 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:17:09  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:09 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:17:09  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:10 Got connection from client ::1
+07/03/2026 09:17:10   0 other clients
+07/03/2026 09:17:10 Got 'ws' WebSockets handshake
+07/03/2026 09:17:10 Hixie no longer supported
+07/03/2026 09:17:10 Client ::1 gone
+07/03/2026 09:17:10 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:17:10  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:10 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:17:10  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:10 Got connection from client ::1
+07/03/2026 09:17:10   0 other clients
+07/03/2026 09:17:10 Got 'ws' WebSockets handshake
+07/03/2026 09:17:10 Hixie no longer supported
+07/03/2026 09:17:10 Client ::1 gone
+07/03/2026 09:17:10 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:17:10  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:10 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:17:10  TOTALS              :      0 |         0/        0 (  0.0%)
+07/03/2026 09:17:28 Got connection from client 127.0.0.1
+07/03/2026 09:17:28   0 other clients
+07/03/2026 09:17:28 Normal socket connection
+07/03/2026 09:17:28 Disabled X server key autorepeat.
+07/03/2026 09:17:28   to force back on run: 'xset r on' (3 times)
+07/03/2026 09:17:28 incr accepted_client=1 for 127.0.0.1:39370  sock=12
+07/03/2026 09:17:28 Client Protocol Version 3.8
+07/03/2026 09:17:28 Protocol version sent 3.8, using 3.8
+07/03/2026 09:17:28 rfbProcessClientSecurityType: executing handler for type 1
+07/03/2026 09:17:28 rfbProcessClientSecurityType: returning securityResult for client rfb version >= 3.8
+07/03/2026 09:17:28 copy_tiles: allocating first_line at size 46
+07/03/2026 09:17:28 Pixel format for client 127.0.0.1:
+07/03/2026 09:17:28   32 bpp, depth 24, little endian
+07/03/2026 09:17:28   true colour: max r 255 g 255 b 255, shift r 0 g 8 b 16
+07/03/2026 09:17:28 rfbProcessClientNormalMessage: ignoring unsupported encoding type tightPng
+07/03/2026 09:17:28 Using image quality level 6 for client 127.0.0.1
+07/03/2026 09:17:28 Using JPEG subsampling 0, Q79 for client 127.0.0.1
+07/03/2026 09:17:28 Using compression level 2 for client 127.0.0.1
+07/03/2026 09:17:28 Enabling NewFBSize protocol extension for client 127.0.0.1
+07/03/2026 09:17:28 Enabling LastRect protocol extension for client 127.0.0.1
+07/03/2026 09:17:28 rfbProcessClientNormalMessage: ignoring unsupported encoding type Enc(0xFFFFFEFE)
+07/03/2026 09:17:28 Enabling ExtDesktopSize protocol extension for client 127.0.0.1
+07/03/2026 09:17:28 rfbProcessClientNormalMessage: ignoring unsupported encoding type Enc(0xFFFFFEC8)
+07/03/2026 09:17:28 rfbProcessClientNormalMessage: ignoring unsupported encoding type Enc(0xFFFFFEC7)
+07/03/2026 09:17:28 rfbProcessClientNormalMessage: ignoring unsupported encoding type Enc(0xFFFFFECD)
+07/03/2026 09:17:28 Enabling ExtendedClipboard extension for client 127.0.0.1
+07/03/2026 09:17:28 rfbProcessClientNormalMessage: ignoring unsupported encoding type Enc(0x574D5664)
+07/03/2026 09:17:28 Enabling full-color cursor updates for client 127.0.0.1
+07/03/2026 09:17:28 Using tight encoding for client 127.0.0.1
+07/03/2026 09:17:28 Sending rfbEncodingExtDesktopSize for size (1440x900) 
+07/03/2026 09:17:29 client 1 network rate 451.2 KB/sec (30398.9 eff KB/sec)
+07/03/2026 09:17:29 client 1 latency:  64.7 ms
+07/03/2026 09:17:29 dt1: 0.0144, dt2: 0.1886 dt3: 0.0647 bytes: 76986
+07/03/2026 09:17:29 link_rate: LR_BROADBAND - 64 ms, 451 KB/s
+07/03/2026 09:17:29 client_set_net: 127.0.0.1  0.0002
+07/03/2026 09:17:29 created   xdamage object: 0x200031
+07/03/2026 09:17:37 created selwin: 0x200032
+07/03/2026 09:17:37 called initialize_xfixes()
+07/03/2026 09:18:22 added missing keysym to X display: 093 0x1e3 "abreve"
+07/03/2026 09:18:24 added missing keysym to X display: 097 0xe2 "acircumflex"
+07/03/2026 09:18:24 added missing keysym to X display: 103 0x1001ea5 "acircumflexacute"
+07/03/2026 09:18:57 increased wireframe timeouts for slow network connection.
+07/03/2026 09:18:57 netrate: 451 KB/sec, latency: 64 ms
+07/03/2026 09:19:16 added missing keysym to X display: 120 0xf4 "ocircumflex"
+07/03/2026 09:19:22 added missing keysym to X display: 132 0xfa "uacute"
+07/03/2026 09:20:54 client_count: 0
+07/03/2026 09:20:54 Restored X server key autorepeat to: 1
+07/03/2026 09:20:54 Client 127.0.0.1 gone
+07/03/2026 09:20:54 Statistics             events    Transmit/ RawEquiv ( saved)
+07/03/2026 09:20:54  ServerCutText       :      5 |       133/      133 (  0.0%)
+07/03/2026 09:20:54  FramebufferUpdate   :    665 |         0/        0 (  0.0%)
+07/03/2026 09:20:54  LastRect            :    136 |      1632/     1632 (  0.0%)
+07/03/2026 09:20:54  tight               :   2640 |   1877736/ 71279652 ( 97.4%)
+07/03/2026 09:20:54  RichCursor          :     67 |     45198/    45198 (  0.0%)
+07/03/2026 09:20:54  ExtendedDesktopSize :      1 |        32/       32 (  0.0%)
+07/03/2026 09:20:54  TOTALS              :   3514 |   1924731/ 71326647 ( 97.3%)
+07/03/2026 09:20:54 Statistics             events    Received/ RawEquiv ( saved)
+07/03/2026 09:20:54  KeyEvent            :    455 |      3640/     3640 (  0.0%)
+07/03/2026 09:20:54  PointerEvent        :   1898 |     11388/    11388 (  0.0%)
+07/03/2026 09:20:54  ClientCutText       :      1 |        16/       16 (  0.0%)
+07/03/2026 09:20:54  FramebufferUpdate   :    667 |      6670/     6670 (  0.0%)
+07/03/2026 09:20:54  SetEncodings        :      1 |        80/       80 (  0.0%)
+07/03/2026 09:20:54  SetPixelFormat      :      1 |        20/       20 (  0.0%)
+07/03/2026 09:20:54  TOTALS              :   3023 |     21814/    21814 (  0.0%)
+07/03/2026 09:20:54 destroyed xdamage object: 0x200031

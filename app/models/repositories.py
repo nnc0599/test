@@ -1,0 +1,284 @@
+from __future__ import annotations
+
+from typing import Iterable
+
+from app.database.connection import get_connection
+from app.utils.time_utils import now_iso_utc7, today_utc7
+
+
+class ProductRepository:
+    def list_products(self) -> list[dict]:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
+                FROM products
+                ORDER BY updated_at DESC
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_product(self, product_code: str) -> dict | None:
+        with get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
+                FROM products
+                WHERE product_code = ?
+                """,
+                (product_code,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def add_product(self, payload: dict) -> None:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO products (
+                    product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload["product_code"],
+                    payload["name"],
+                    payload.get("warranty", ""),
+                    payload.get("unit", ""),
+                    int(payload.get("quantity", 0)),
+                    int(payload.get("sale_price", 0)),
+                    now_iso_utc7(),
+                    payload.get("description", ""),
+                    payload.get("note", ""),
+                ),
+            )
+
+    def update_product(self, product_code: str, payload: dict) -> None:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE products
+                SET
+                    name = ?,
+                    warranty = ?,
+                    unit = ?,
+                    quantity = ?,
+                    sale_price = ?,
+                    updated_at = ?,
+                    description = ?,
+                    note = ?
+                WHERE product_code = ?
+                """,
+                (
+                    payload["name"],
+                    payload.get("warranty", ""),
+                    payload.get("unit", ""),
+                    int(payload.get("quantity", 0)),
+                    int(payload.get("sale_price", 0)),
+                    now_iso_utc7(),
+                    payload.get("description", ""),
+                    payload["note"],
+                    product_code,
+                ),
+            )
+
+    def delete_product(self, product_code: str) -> None:
+        with get_connection() as conn:
+            conn.execute("DELETE FROM products WHERE product_code = ?", (product_code,))
+
+    def search_products(self, keyword: str) -> list[dict]:
+        like_kw = f"%{keyword.strip()}%"
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT product_code, name, warranty, unit, quantity, sale_price, updated_at, description, note
+                FROM products
+                WHERE product_code LIKE ? OR name LIKE ? OR description LIKE ?
+                ORDER BY name ASC
+                LIMIT 20
+                """,
+                (like_kw, like_kw, like_kw),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def decrease_stocks(self, lines: Iterable[dict]) -> None:
+        with get_connection() as conn:
+            for line in lines:
+                cursor = conn.execute(
+                    """
+                    UPDATE products
+                    SET quantity = quantity - ?
+                    WHERE product_code = ? AND quantity >= ?
+                    """,
+                    (line["quantity"], line["product_code"], line["quantity"]),
+                )
+                if cursor.rowcount == 0:
+                    raise ValueError(
+                        f"San pham {line['product_code']} khong du so luong de xuat kho."
+                    )
+
+
+class CustomerRepository:
+    def upsert_customer(self, payload: dict) -> None:
+        with get_connection() as conn:
+            exists = conn.execute(
+                "SELECT customer_code FROM customers WHERE customer_code = ?",
+                (payload["customer_code"],),
+            ).fetchone()
+            if exists:
+                conn.execute(
+                    """
+                    UPDATE customers
+                    SET full_name = ?, phone = ?, address = ?, tax_code = ?, note = ?
+                    WHERE customer_code = ?
+                    """,
+                    (
+                        payload["full_name"],
+                        payload.get("phone", ""),
+                        payload.get("address", ""),
+                        payload.get("tax_code", ""),
+                        payload.get("note", ""),
+                        payload["customer_code"],
+                    ),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO customers (customer_code, full_name, phone, address, tax_code, note)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        payload["customer_code"],
+                        payload["full_name"],
+                        payload.get("phone", ""),
+                        payload.get("address", ""),
+                        payload.get("tax_code", ""),
+                        payload.get("note", ""),
+                    ),
+                )
+
+
+class InvoiceRepository:
+    def create_invoice(self, payload: dict, lines: list[dict]) -> None:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO invoices (
+                    invoice_no, created_at, customer_code, customer_name, phone, address, total_amount, ship_fee
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload["invoice_no"],
+                    payload["created_at"],
+                    payload.get("customer_code", ""),
+                    payload["customer_name"],
+                    payload.get("phone", ""),
+                    payload.get("address", ""),
+                    int(payload["total_amount"]),
+                    int(payload.get("ship_fee", 0)),
+                ),
+            )
+
+            conn.executemany(
+                """
+                INSERT INTO invoice_items (
+                    invoice_no, product_code, product_name, quantity, unit_price, line_total
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        payload["invoice_no"],
+                        line["product_code"],
+                        line["product_name"],
+                        int(line["quantity"]),
+                        int(line["unit_price"]),
+                        int(line["line_total"]),
+                    )
+                    for line in lines
+                ],
+            )
+
+            for line in lines:
+                cursor = conn.execute(
+                    """
+                    UPDATE products
+                    SET quantity = quantity - ?
+                    WHERE product_code = ? AND quantity >= ?
+                    """,
+                    (line["quantity"], line["product_code"], line["quantity"]),
+                )
+                if cursor.rowcount == 0:
+                    raise ValueError(
+                        f"San pham {line['product_code']} khong du so luong de xuat kho."
+                    )
+
+            paid_amount = int(payload.get("paid_amount", 0))
+            total = int(payload["total_amount"])
+            conn.execute(
+                """
+                INSERT INTO payments (
+                    customer_name, customer_code, purchase_date, payment_date, total_amount, paid_amount, remaining_amount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload["customer_name"],
+                    payload.get("customer_code", ""),
+                    payload["created_at"],
+                    payload.get("payment_date", payload["created_at"]),
+                    total,
+                    paid_amount,
+                    total - paid_amount,
+                ),
+            )
+
+
+class ReportRepository:
+    def revenue_today(self) -> int:
+        day = today_utc7()
+        with get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COALESCE(SUM(total_amount), 0) AS total
+                FROM invoices
+                WHERE substr(created_at, 1, 10) = ?
+                """,
+                (day,),
+            ).fetchone()
+            return int(row["total"])
+
+    def revenue_month(self) -> int:
+        month = today_utc7()[:7]
+        with get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COALESCE(SUM(total_amount), 0) AS total
+                FROM invoices
+                WHERE substr(created_at, 1, 7) = ?
+                """,
+                (month,),
+            ).fetchone()
+            return int(row["total"])
+
+    def revenue_by_day(self) -> list[dict]:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT substr(created_at, 1, 10) AS day, COALESCE(SUM(total_amount), 0) AS total
+                FROM invoices
+                GROUP BY substr(created_at, 1, 10)
+                ORDER BY day DESC
+                LIMIT 31
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def revenue_by_month(self) -> list[dict]:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT substr(created_at, 1, 7) AS month, COALESCE(SUM(total_amount), 0) AS total
+                FROM invoices
+                GROUP BY substr(created_at, 1, 7)
+                ORDER BY month DESC
+                LIMIT 24
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
