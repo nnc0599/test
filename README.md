@@ -41,15 +41,26 @@
 |   |   |-- entities.py
 |   |   `-- repositories.py
 |   |-- utils
+|   |   |-- invoice_docx.py
 |   |   `-- time_utils.py
 |   `-- views
 |       |-- dialogs
 |       |   |-- auth_dialog.py
 |       |   |-- description_dialog.py
-|       |   `-- product_dialog.py
+|       |   |-- invoice_detail_dialog.py
+|       |   |-- invoice_preview_dialog.py
+|       |   |-- product_dialog.py
+|       |   `-- product_history_dialog.py
 |       `-- main_window.py
 |-- data
+|   |-- .preview_assets
+|   |   |-- image1.png
+|   |   `-- image2.png
 |   `-- sales_app.db (tự tạo khi chạy)
+|-- scripts
+|   |-- read_current_database.py
+|   `-- run_codespaces_gui.sh
+|-- template.docx
 |-- requirements.txt
 `-- run.py
 ```
