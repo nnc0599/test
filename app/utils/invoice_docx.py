@@ -233,6 +233,26 @@ def _set_table_grid_borders(table, color: str = "9CA3AF", size: str = "6") -> No
         edge.set(qn("w:color"), color)
 
 
+def _set_table_fixed_layout(table) -> None:
+    tbl_pr = table._tbl.tblPr
+    tbl_layout = tbl_pr.first_child_found_in("w:tblLayout")
+    if tbl_layout is None:
+        tbl_layout = OxmlElement("w:tblLayout")
+        tbl_pr.append(tbl_layout)
+    tbl_layout.set(qn("w:type"), "fixed")
+
+
+def _apply_column_widths(row, column_widths_cm: list[float]) -> None:
+    for index, width in enumerate(column_widths_cm):
+        row.cells[index].width = Cm(width)
+
+
+def _resolve_data_alignment(column_index: int, centered_columns: set[int] | None):
+    if centered_columns is None or column_index in centered_columns:
+        return WD_ALIGN_PARAGRAPH.CENTER
+    return WD_ALIGN_PARAGRAPH.LEFT
+
+
 def _shade_cell(cell, fill: str) -> None:
     tc_pr = cell._tc.get_or_add_tcPr()
     shd = tc_pr.find(qn("w:shd"))
@@ -311,11 +331,11 @@ def _add_report_data_table(
     table = doc.add_table(rows=1, cols=len(headers))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.autofit = False
+    _set_table_fixed_layout(table)
     _set_table_grid_borders(table, color="94A3B8")
     _set_table_row_height(table, 0.7)
 
-    for index, width in enumerate(column_widths_cm):
-        table.rows[0].cells[index].width = Cm(width)
+    _apply_column_widths(table.rows[0], column_widths_cm)
 
     for index, header in enumerate(headers):
         header_cell = table.rows[0].cells[index]
@@ -348,11 +368,12 @@ def _add_report_data_table(
         row = table.add_row()
         row.height = Cm(0.7)
         row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+        _apply_column_widths(row, column_widths_cm)
         for col_index, value in enumerate(values):
             _set_cell_text(
                 row.cells[col_index],
                 value,
-                alignment=WD_ALIGN_PARAGRAPH.CENTER,
+                alignment=_resolve_data_alignment(col_index, centered_columns),
                 vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER,
             )
 
