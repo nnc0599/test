@@ -16,6 +16,8 @@ from docx.oxml.ns import qn
 from docx.shared import Cm
 from docx.shared import Pt
 
+from app.utils.time_utils import now_utc7
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = ROOT_DIR / "template.docx"
@@ -191,6 +193,186 @@ def _set_table_no_borders(table) -> None:
             edge = OxmlElement(f"w:{edge_name}")
             tbl_borders.append(edge)
         edge.set(qn("w:val"), "nil")
+
+
+def _set_table_grid_borders(table, color: str = "9CA3AF", size: str = "6") -> None:
+    tbl_pr = table._tbl.tblPr
+    tbl_borders = tbl_pr.first_child_found_in("w:tblBorders")
+    if tbl_borders is None:
+        tbl_borders = OxmlElement("w:tblBorders")
+        tbl_pr.append(tbl_borders)
+
+    for edge_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
+        edge = tbl_borders.find(qn(f"w:{edge_name}"))
+        if edge is None:
+            edge = OxmlElement(f"w:{edge_name}")
+            tbl_borders.append(edge)
+        edge.set(qn("w:val"), "single")
+        edge.set(qn("w:sz"), size)
+        edge.set(qn("w:space"), "0")
+        edge.set(qn("w:color"), color)
+
+
+def _shade_cell(cell, fill: str) -> None:
+    tc_pr = cell._tc.get_or_add_tcPr()
+    shd = tc_pr.find(qn("w:shd"))
+    if shd is None:
+        shd = OxmlElement("w:shd")
+        tc_pr.append(shd)
+    shd.set(qn("w:fill"), fill)
+
+
+def _set_document_style(doc: Document) -> None:
+    for section in doc.sections:
+        section.top_margin = Cm(1.8)
+        section.bottom_margin = Cm(1.6)
+        section.left_margin = Cm(1.8)
+        section.right_margin = Cm(1.8)
+
+
+def _add_spacer(doc: Document, size_pt: int = 4) -> None:
+    paragraph = doc.add_paragraph()
+    run = paragraph.add_run("")
+    _set_run_font(run)
+    run.font.size = Pt(size_pt)
+
+
+def _add_report_title(doc: Document, title: str, subtitle: str | None = None) -> None:
+    title_paragraph = doc.add_paragraph()
+    title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title_paragraph.add_run(title)
+    _set_run_font(title_run, bold=True)
+    title_run.font.size = Pt(16)
+
+    if subtitle:
+        subtitle_paragraph = doc.add_paragraph()
+        subtitle_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        subtitle_run = subtitle_paragraph.add_run(subtitle)
+        _set_run_font(subtitle_run, italic=True)
+        subtitle_run.font.size = Pt(11)
+
+
+def _add_report_meta_table(doc: Document, rows: list[tuple[str, str]]) -> None:
+    table = doc.add_table(rows=len(rows), cols=2)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    _set_table_grid_borders(table, color="CBD5E1")
+
+    widths = [Cm(4.2), Cm(12.0)]
+    for row in table.rows:
+        row.cells[0].width = widths[0]
+        row.cells[1].width = widths[1]
+
+    for row_index, (label, value) in enumerate(rows):
+        _shade_cell(table.cell(row_index, 0), "E2E8F0")
+        _set_cell_text(table.cell(row_index, 0), label, bold=True)
+        _set_cell_text(table.cell(row_index, 1), value)
+
+
+def _add_report_data_table(
+    doc: Document,
+    headers: list[str],
+    data_rows: list[list[str]],
+    column_widths_cm: list[float],
+    centered_columns: set[int] | None = None,
+) -> None:
+    centered_columns = centered_columns or set()
+    table = doc.add_table(rows=1, cols=len(headers))
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    _set_table_grid_borders(table, color="94A3B8")
+
+    for index, width in enumerate(column_widths_cm):
+        table.rows[0].cells[index].width = Cm(width)
+
+    for index, header in enumerate(headers):
+        header_cell = table.rows[0].cells[index]
+        _shade_cell(header_cell, "DCE6F1")
+        alignment = WD_ALIGN_PARAGRAPH.CENTER if index in centered_columns else WD_ALIGN_PARAGRAPH.CENTER
+        _set_cell_text(header_cell, header, alignment=alignment, bold=True)
+
+    if not data_rows:
+        row = table.add_row()
+        empty_cell = row.cells[0]
+        if len(headers) > 1:
+            empty_cell = row.cells[0].merge(row.cells[len(headers) - 1])
+        _set_cell_text(
+            empty_cell,
+            "Không có dữ liệu trong kỳ báo cáo đã chọn.",
+            alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            italic=True,
+        )
+        return
+
+    for values in data_rows:
+        row = table.add_row()
+        for col_index, value in enumerate(values):
+            alignment = WD_ALIGN_PARAGRAPH.CENTER if col_index in centered_columns else None
+            _set_cell_text(row.cells[col_index], value, alignment=alignment)
+
+
+def _add_signature_section(doc: Document, generated_at_text: str) -> None:
+    location_paragraph = doc.add_paragraph()
+    location_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    location_run = location_paragraph.add_run(generated_at_text)
+    _set_run_font(location_run, italic=True)
+
+    table = doc.add_table(rows=2, cols=2)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    _set_table_no_borders(table)
+
+    for row in table.rows:
+        row.cells[0].width = Cm(8.0)
+        row.cells[1].width = Cm(8.0)
+
+    _set_cell_text(table.cell(0, 0), "Người làm báo cáo", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    _set_cell_text(table.cell(0, 1), "Giám đốc", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    _set_cell_text(table.cell(1, 0), "(Ký, ghi rõ họ tên)", alignment=WD_ALIGN_PARAGRAPH.CENTER, italic=True)
+    _set_cell_text(table.cell(1, 1), "(Ký, ghi rõ họ tên)", alignment=WD_ALIGN_PARAGRAPH.CENTER, italic=True)
+
+    for _ in range(4):
+        _add_spacer(doc, size_pt=6)
+
+
+def export_report_docx(
+    *,
+    report_title: str,
+    period_label: str,
+    summary_rows: list[tuple[str, str]],
+    headers: list[str],
+    data_rows: list[list[str]],
+    output_name: str,
+    column_widths_cm: list[float],
+    centered_columns: set[int] | None = None,
+    output_dir: Path | None = None,
+) -> Path:
+    doc = Document()
+    _set_document_style(doc)
+
+    generated_at = now_utc7()
+    generated_at_label = generated_at.strftime("Ngày %d tháng %m năm %Y, %H:%M:%S")
+    subtitle = f"Kỳ báo cáo: {period_label}" if period_label else None
+
+    _add_report_title(doc, report_title, subtitle)
+    _add_spacer(doc)
+    _add_report_meta_table(
+        doc,
+        [
+            ("Thời gian tạo báo cáo", generated_at.strftime("%d/%m/%Y %H:%M:%S")),
+            *summary_rows,
+        ],
+    )
+    _add_spacer(doc)
+    _add_report_data_table(doc, headers, data_rows, column_widths_cm, centered_columns)
+    _add_spacer(doc)
+    _add_signature_section(doc, generated_at_label)
+
+    save_dir = output_dir or EXPORT_DIR
+    save_dir.mkdir(parents=True, exist_ok=True)
+    output_path = save_dir / output_name
+    doc.save(str(output_path))
+    return output_path
 
 
 def _build_customer_info_table(doc: Document, invoice: dict):

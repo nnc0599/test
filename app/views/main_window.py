@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 from typing import Any
 
 from pathlib import Path
@@ -40,7 +39,7 @@ from app.controllers.product_controller import ProductController
 from app.controllers.report_controller import ReportController
 from app.utils.invoice_docx import EXPORT_DIR
 from app.utils.time_utils import now_iso_utc7
-from app.utils.invoice_docx import export_invoice_docx
+from app.utils.invoice_docx import export_invoice_docx, export_report_docx
 from app.views.dialogs.auth_dialog import PasswordDialog
 from app.views.dialogs.description_dialog import DescriptionDialog
 from app.views.dialogs.invoice_detail_dialog import InvoiceDetailDialog
@@ -869,14 +868,6 @@ class MainWindow(QMainWindow):
         self._sync_goods_report_mode()
         self.refresh_report()
 
-    def _write_csv_report(self, file_name: str, rows: list[list[str]]) -> Path:
-        self.invoice_export_dir.mkdir(parents=True, exist_ok=True)
-        report_path = self.invoice_export_dir / file_name
-        with report_path.open("w", newline="", encoding="utf-8-sig") as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerows(rows)
-        return report_path
-
     def _export_revenue_report(self) -> None:
         period_type = getattr(self, "_current_revenue_period_type", "day")
         period_value = getattr(self, "_current_revenue_period_value", QDate.currentDate().toString("yyyy-MM-dd"))
@@ -884,15 +875,7 @@ class MainWindow(QMainWindow):
         rows = getattr(self, "_current_revenue_rows", [])
         period_label = self._period_label(period_type, period_value)
 
-        csv_rows = [
-            ["Báo cáo doanh thu"],
-            ["Kỳ báo cáo", period_label],
-            ["Số hóa đơn", str(summary["invoice_count"])],
-            ["Tổng doanh thu", format_money(summary["total_amount"])],
-            [],
-            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền"],
-        ]
-        csv_rows.extend(
+        data_rows = [
             [
                 item["invoice_no"],
                 item["created_at"],
@@ -901,11 +884,24 @@ class MainWindow(QMainWindow):
                 format_money(item["total_amount"]),
             ]
             for item in rows
-        )
+        ]
 
-        file_name = f"bao_cao_doanh_thu_{period_type}_{period_value}.csv"
-        report_path = self._write_csv_report(file_name, csv_rows)
-        QMessageBox.information(self, "Xuất thành công", f"Đã lưu báo cáo tại:\n{report_path}")
+        file_name = f"bao_cao_doanh_thu_{period_type}_{period_value}.docx"
+        report_path = export_report_docx(
+            report_title="BÁO CÁO DOANH THU",
+            period_label=period_label,
+            summary_rows=[
+                ("Số hóa đơn", str(summary["invoice_count"])),
+                ("Tổng doanh thu", format_money(summary["total_amount"])),
+            ],
+            headers=["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền"],
+            data_rows=data_rows,
+            output_name=file_name,
+            column_widths_cm=[3.0, 3.4, 4.4, 3.0, 3.2],
+            centered_columns={0, 1, 3, 4},
+            output_dir=self.invoice_export_dir,
+        )
+        QMessageBox.information(self, "Xuất thành công", f"Đã lưu file Word tại:\n{report_path}")
 
     def _export_goods_report(self) -> None:
         report_type = getattr(self, "_current_goods_report_type", "sold")
@@ -916,16 +912,7 @@ class MainWindow(QMainWindow):
             period_value = getattr(self, "_current_goods_period_value", QDate.currentDate().toString("yyyy-MM-dd"))
             summary = getattr(self, "_current_goods_summary", {"product_count": 0, "total_quantity": 0, "total_amount": 0})
             period_label = self._period_label(period_type, period_value)
-            csv_rows = [
-                ["Báo cáo hàng hóa - Sản phẩm đã bán"],
-                ["Kỳ báo cáo", period_label],
-                ["Số sản phẩm", str(summary["product_count"])],
-                ["Tổng số lượng bán", str(summary["total_quantity"])],
-                ["Tổng doanh thu", format_money(summary["total_amount"])],
-                [],
-                ["Mã hàng", "Tên hàng", "Đơn vị", "Số lượng bán", "Doanh thu"],
-            ]
-            csv_rows.extend(
+            data_rows = [
                 [
                     item["product_code"],
                     item["product_name"],
@@ -934,19 +921,20 @@ class MainWindow(QMainWindow):
                     format_money(item["sold_amount"]),
                 ]
                 for item in rows
-            )
-            file_name = f"bao_cao_hang_hoa_da_ban_{period_type}_{period_value}.csv"
+            ]
+            file_name = f"bao_cao_hang_hoa_da_ban_{period_type}_{period_value}.docx"
+            report_title = "BÁO CÁO HÀNG HÓA - SẢN PHẨM ĐÃ BÁN"
+            summary_rows = [
+                ("Số sản phẩm", str(summary["product_count"])),
+                ("Tổng số lượng bán", str(summary["total_quantity"])),
+                ("Tổng doanh thu", format_money(summary["total_amount"])),
+            ]
+            headers = ["Mã hàng", "Tên hàng", "Đơn vị", "Số lượng bán", "Doanh thu"]
+            column_widths_cm = [2.8, 5.6, 2.0, 3.0, 3.6]
+            centered_columns = {0, 2, 3, 4}
         else:
             summary = getattr(self, "_current_goods_summary", {"product_count": 0, "total_quantity": 0, "total_value": 0})
-            csv_rows = [
-                ["Báo cáo hàng hóa - Sản phẩm tồn kho"],
-                ["Số sản phẩm", str(summary["product_count"])],
-                ["Tổng số lượng tồn", str(summary["total_quantity"])],
-                ["Tổng giá trị tồn kho", format_money(summary["total_value"])],
-                [],
-                ["Mã hàng", "Tên hàng", "Số lượng", "Đơn giá"],
-            ]
-            csv_rows.extend(
+            data_rows = [
                 [
                     item["product_code"],
                     item["name"],
@@ -954,11 +942,31 @@ class MainWindow(QMainWindow):
                     format_money(item["sale_price"]),
                 ]
                 for item in rows
-            )
-            file_name = f"bao_cao_ton_kho_{QDate.currentDate().toString('yyyy-MM-dd')}.csv"
+            ]
+            file_name = f"bao_cao_ton_kho_{QDate.currentDate().toString('yyyy-MM-dd')}.docx"
+            report_title = "BÁO CÁO HÀNG HÓA - SẢN PHẨM TỒN KHO"
+            period_label = "Tồn kho hiện tại"
+            summary_rows = [
+                ("Số sản phẩm", str(summary["product_count"])),
+                ("Tổng số lượng tồn", str(summary["total_quantity"])),
+                ("Tổng giá trị tồn kho", format_money(summary["total_value"])),
+            ]
+            headers = ["Mã hàng", "Tên hàng", "Số lượng", "Đơn giá"]
+            column_widths_cm = [3.0, 7.8, 2.8, 3.4]
+            centered_columns = {0, 2, 3}
 
-        report_path = self._write_csv_report(file_name, csv_rows)
-        QMessageBox.information(self, "Xuất thành công", f"Đã lưu báo cáo tại:\n{report_path}")
+        report_path = export_report_docx(
+            report_title=report_title,
+            period_label=period_label,
+            summary_rows=summary_rows,
+            headers=headers,
+            data_rows=data_rows,
+            output_name=file_name,
+            column_widths_cm=column_widths_cm,
+            centered_columns=centered_columns,
+            output_dir=self.invoice_export_dir,
+        )
+        QMessageBox.information(self, "Xuất thành công", f"Đã lưu file Word tại:\n{report_path}")
 
     def _switch_tab(self, idx: int) -> None:
         self.stack.setCurrentIndex(idx)
