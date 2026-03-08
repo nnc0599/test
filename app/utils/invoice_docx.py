@@ -242,9 +242,36 @@ def _set_table_fixed_layout(table) -> None:
     tbl_layout.set(qn("w:type"), "fixed")
 
 
+def _set_cell_width(cell, width_cm: float) -> None:
+    width = Cm(width_cm)
+    cell.width = width
+
+    tc_pr = cell._tc.get_or_add_tcPr()
+    tc_w = tc_pr.find(qn("w:tcW"))
+    if tc_w is None:
+        tc_w = OxmlElement("w:tcW")
+        tc_pr.append(tc_w)
+    tc_w.set(qn("w:type"), "dxa")
+    tc_w.set(qn("w:w"), str(int(width.twips)))
+
+
+def _set_table_grid(table, column_widths_cm: list[float]) -> None:
+    tbl_grid = table._tbl.tblGrid
+    if tbl_grid is not None:
+        table._tbl.remove(tbl_grid)
+
+    tbl_grid = OxmlElement("w:tblGrid")
+    for width_cm in column_widths_cm:
+        grid_col = OxmlElement("w:gridCol")
+        grid_col.set(qn("w:w"), str(int(Cm(width_cm).twips)))
+        tbl_grid.append(grid_col)
+
+    table._tbl.insert(1, tbl_grid)
+
+
 def _apply_column_widths(row, column_widths_cm: list[float]) -> None:
     for index, width in enumerate(column_widths_cm):
-        row.cells[index].width = Cm(width)
+        _set_cell_width(row.cells[index], width)
 
 
 def _resolve_data_alignment(column_index: int, centered_columns: set[int] | None):
@@ -332,6 +359,7 @@ def _add_report_data_table(
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.autofit = False
     _set_table_fixed_layout(table)
+    _set_table_grid(table, column_widths_cm)
     _set_table_grid_borders(table, color="94A3B8")
     _set_table_row_height(table, 0.7)
 
