@@ -102,20 +102,26 @@ Tại màn hình `Sản phẩm`:
 - `Sửa thông tin`: chỉ bật khi đã chọn sản phẩm; bắt buộc nhập `Ghi chú`, nếu để trống thì nút `OK` bị vô hiệu hóa.
 - `Xóa sản phẩm`: cần chọn sản phẩm, xác nhận xóa và nhập lại mật khẩu thêm một lần nữa.
 
-## Chạy GUI trong Codespaces
+## Chạy trên web (GitHub Codespaces / noVNC)
 
-Nếu mở repo trong GitHub Codespaces, app PySide6 không thể dùng X11 của máy host trực tiếp. Repo này có script để chạy GUI qua trình duyệt bằng Xvfb + noVNC:
+Repo có cấu hình `.devcontainer` sẵn sàng. Khi mở repo bằng **"Open in Codespaces"** (hoặc chạy `gh codespace create`), container sẽ tự động:
+
+- Cài Python 3.12, Xvfb, x11vnc, noVNC và toàn bộ thư viện Qt/X11.
+- Cài các gói Python từ `requirements.txt`.
+
+Sau khi Codespace khởi động xong, chạy một lệnh để bật màn hình ảo và mở GUI trên trình duyệt:
 
 ```bash
-chmod +x scripts/run_codespaces_gui.sh
 ./scripts/run_codespaces_gui.sh start
 ```
 
-Script sẽ in ra URL dạng:
+Script in ra URL dạng:
 
 ```text
 https://<codespace-name>-6080.app.github.dev/vnc.html?autoconnect=1&resize=scale
 ```
+
+Port `6080` được tự động chuyển tiếp và mở trong trình duyệt (cấu hình trong `.devcontainer/devcontainer.json`).
 
 Lệnh bổ sung:
 

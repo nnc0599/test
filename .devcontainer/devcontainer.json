@@ -1,0 +1,22 @@
+{
+    "name": "Phần Mềm Bán Hàng – Web GUI",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    // Port 6080 is the noVNC web interface served by run_codespaces_gui.sh
+    "forwardPorts": [6080],
+    "portsAttributes": {
+        "6080": {
+            "label": "noVNC Web GUI",
+            "onAutoForward": "openBrowser"
+        }
+    },
+    "postCreateCommand": "pip install -r requirements.txt && chmod +x scripts/run_codespaces_gui.sh",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python"
+            ]
+        }
+    }
+}
