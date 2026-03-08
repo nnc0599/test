@@ -29,6 +29,14 @@ class OrderController:
     def list_invoices(self) -> list[dict]:
         return self.invoice_repo.list_invoices()
 
+    def search_invoices(
+        self,
+        keyword: str,
+        period_type: str = "all",
+        period_value: str = "",
+    ) -> list[dict]:
+        return self.invoice_repo.search_invoices(keyword, period_type, period_value)
+
     def get_invoice_detail(self, invoice_no: str) -> dict | None:
         return self.invoice_repo.get_invoice_detail(invoice_no)
 

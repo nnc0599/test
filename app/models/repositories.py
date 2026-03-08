@@ -363,6 +363,63 @@ class InvoiceRepository:
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def search_invoices(
+        self,
+        keyword: str,
+        period_type: str = "all",
+        period_value: str = "",
+    ) -> list[dict]:
+        normalized_keyword = keyword.strip()
+        clauses: list[str] = []
+        params: list[str] = []
+
+        if normalized_keyword:
+            like_keyword = f"%{normalized_keyword}%"
+            clauses.append("(invoices.invoice_no LIKE ? OR invoices.customer_name LIKE ? OR invoices.phone LIKE ?)")
+            params.extend([like_keyword, like_keyword, like_keyword])
+
+        normalized_period_type = period_type.strip().lower()
+        if normalized_period_type == "day" and period_value:
+            clauses.append("substr(invoices.created_at, 1, 10) = ?")
+            params.append(period_value[:10])
+        elif normalized_period_type == "month" and period_value:
+            clauses.append("substr(invoices.created_at, 1, 7) = ?")
+            params.append(period_value[:7])
+
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        with get_connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    invoices.invoice_no,
+                    invoices.created_at,
+                    invoices.customer_name,
+                    invoices.phone,
+                    invoices.email,
+                    invoices.tax_code,
+                    invoices.address,
+                    invoices.total_amount,
+                    COUNT(invoice_items.id) AS item_count
+                FROM invoices
+                LEFT JOIN invoice_items ON invoice_items.invoice_no = invoices.invoice_no
+                {where_clause}
+                GROUP BY
+                    invoices.invoice_no,
+                    invoices.created_at,
+                    invoices.customer_name,
+                    invoices.phone,
+                    invoices.email,
+                    invoices.tax_code,
+                    invoices.address,
+                    invoices.total_amount
+                ORDER BY invoices.created_at DESC, invoices.invoice_no DESC
+                LIMIT 200
+                """,
+                tuple(params),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
     def get_invoice_detail(self, invoice_no: str) -> dict | None:
         with get_connection() as conn:
             invoice = conn.execute(
@@ -399,6 +456,21 @@ class InvoiceRepository:
 
 
 class ReportRepository:
+    @staticmethod
+    def _period_prefix(period_type: str, period_value: str) -> tuple[int, str]:
+        normalized_type = period_type.strip().lower()
+        period_lengths = {
+            "day": 10,
+            "month": 7,
+            "year": 4,
+        }
+        if normalized_type not in period_lengths:
+            raise ValueError("Kiểu kỳ báo cáo không hợp lệ")
+
+        length = period_lengths[normalized_type]
+        normalized_value = period_value.strip()[:length]
+        return length, normalized_value
+
     def revenue_today(self) -> int:
         day = today_utc7()
         with get_connection() as conn:
@@ -425,28 +497,49 @@ class ReportRepository:
             ).fetchone()
             return int(row["total"])
 
-    def revenue_by_day(self) -> list[dict]:
+    def revenue_by_period(self, period_type: str, period_value: str) -> list[dict]:
+        prefix_length, prefix_value = self._period_prefix(period_type, period_value)
         with get_connection() as conn:
             rows = conn.execute(
-                """
-                SELECT substr(created_at, 1, 10) AS day, COALESCE(SUM(total_amount), 0) AS total
+                f"""
+                SELECT invoice_no, created_at, customer_name, phone, total_amount
                 FROM invoices
-                GROUP BY substr(created_at, 1, 10)
-                ORDER BY day DESC
-                LIMIT 31
-                """
+                WHERE substr(created_at, 1, {prefix_length}) = ?
+                ORDER BY created_at DESC, invoice_no DESC
+                """,
+                (prefix_value,),
             ).fetchall()
             return [dict(row) for row in rows]
 
-    def revenue_by_month(self) -> list[dict]:
+    def sold_products_by_period(self, period_type: str, period_value: str) -> list[dict]:
+        prefix_length, prefix_value = self._period_prefix(period_type, period_value)
+        with get_connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    invoice_items.product_code,
+                    invoice_items.product_name,
+                    COALESCE(invoice_items.unit, '') AS unit,
+                    SUM(invoice_items.quantity) AS sold_quantity,
+                    SUM(invoice_items.line_total) AS sold_amount
+                FROM invoice_items
+                INNER JOIN invoices ON invoices.invoice_no = invoice_items.invoice_no
+                WHERE substr(invoices.created_at, 1, {prefix_length}) = ?
+                GROUP BY invoice_items.product_code, invoice_items.product_name, COALESCE(invoice_items.unit, '')
+                ORDER BY sold_quantity DESC, sold_amount DESC, invoice_items.product_name ASC
+                """,
+                (prefix_value,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def stock_products(self) -> list[dict]:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT substr(created_at, 1, 7) AS month, COALESCE(SUM(total_amount), 0) AS total
-                FROM invoices
-                GROUP BY substr(created_at, 1, 7)
-                ORDER BY month DESC
-                LIMIT 24
+                SELECT product_code, name, quantity, sale_price
+                FROM products
+                WHERE quantity > 0
+                ORDER BY name ASC, product_code ASC
                 """
             ).fetchall()
             return [dict(row) for row in rows]

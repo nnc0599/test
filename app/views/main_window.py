@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import csv
 from typing import Any
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QSettings, Qt, QTimer
+from PySide6.QtCore import QDate, QEvent, QEasingCurve, QPropertyAnimation, QSettings, Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
+    QDateEdit,
     QFileDialog,
-    QFormLayout,
     QFrame,
     QGraphicsOpacityEffect,
     QGridLayout,
@@ -51,6 +53,9 @@ def format_money(value: int) -> str:
     return f"{int(value):,}".replace(",", ".")
 
 
+LIST_ROW_HEIGHT_PX = 35
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -78,6 +83,7 @@ class MainWindow(QMainWindow):
 
         self._apply_base_style()
         self._build_ui()
+        self._apply_uniform_list_row_heights()
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
@@ -175,6 +181,21 @@ class MainWindow(QMainWindow):
 
         self._switch_tab(0)
 
+    def _apply_uniform_list_row_heights(self) -> None:
+        for widget in self.findChildren(QListWidget):
+            widget.setSpacing(0)
+            existing_style = widget.styleSheet().strip()
+            item_style = (
+                f"QListWidget::item {{ min-height: {LIST_ROW_HEIGHT_PX}px; "
+                f"max-height: {LIST_ROW_HEIGHT_PX}px; }}"
+            )
+            if item_style not in existing_style:
+                widget.setStyleSheet(f"{existing_style}\n{item_style}".strip())
+
+        for widget in self.findChildren(QTableWidget):
+            widget.verticalHeader().setDefaultSectionSize(LIST_ROW_HEIGHT_PX)
+            widget.verticalHeader().setMinimumSectionSize(LIST_ROW_HEIGHT_PX)
+
     def _build_order_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -268,18 +289,50 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.order_table)
 
         payment_box = QGroupBox("Tổng tiền hóa đơn")
-        payment_form = QFormLayout(payment_box)
+        payment_layout = QVBoxLayout(payment_box)
+        payment_layout.setContentsMargins(10, 10, 10, 10)
+        payment_layout.setSpacing(8)
 
         self.total_goods_text_label = QLabel("Tổng tiền hàng")
         self.total_goods_label = QLabel("0")
+        self.ship_fee_text_label = QLabel("Phí ship")
         self.ship_fee_spin = QSpinBox()
         self.ship_fee_spin.setRange(0, 2_000_000_000)
         self.ship_fee_spin.setValue(0)
+        self.total_all_text_label = QLabel("Tổng số tiền")
         self.total_all_label = QLabel("0")
 
-        payment_form.addRow(self.total_goods_text_label, self.total_goods_label)
-        payment_form.addRow("Phí ship", self.ship_fee_spin)
-        payment_form.addRow("Tổng số tiền", self.total_all_label)
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(24)
+
+        goods_row = QHBoxLayout()
+        goods_row.setContentsMargins(0, 0, 0, 0)
+        goods_row.setSpacing(8)
+        goods_row.addWidget(self.total_goods_text_label)
+        goods_row.addWidget(self.total_goods_label)
+        goods_row.addStretch(1)
+
+        ship_row = QHBoxLayout()
+        ship_row.setContentsMargins(0, 0, 0, 0)
+        ship_row.setSpacing(8)
+        ship_row.addWidget(self.ship_fee_text_label)
+        ship_row.addWidget(self.ship_fee_spin)
+
+        top_row.addLayout(goods_row, 1)
+        top_row.addLayout(ship_row, 1)
+
+        total_row = QHBoxLayout()
+        total_row.setContentsMargins(0, 0, 0, 0)
+        total_row.setSpacing(8)
+        total_row.addWidget(self.total_all_text_label)
+        total_row.addWidget(self.total_all_label)
+        total_row.addStretch(1)
+
+        payment_layout.addLayout(top_row)
+        payment_layout.addLayout(total_row)
+
+        self._apply_payment_summary_fonts()
 
         layout.addWidget(payment_box)
 
@@ -352,6 +405,12 @@ class MainWindow(QMainWindow):
         ):
             self.customer_suggestion_list.hide()
 
+        if getattr(self, "invoice_suggestion_list", None) is not None and self.invoice_suggestion_list.isVisible() and not any(
+            self._widget_is_within(clicked_widget, widget)
+            for widget in [self.invoice_suggestion_list, self.invoice_search_edit]
+        ):
+            self.invoice_suggestion_list.hide()
+
     def _build_product_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -423,145 +482,231 @@ class MainWindow(QMainWindow):
     def _build_report_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(10)
+        layout.setSpacing(12)
 
-        cards = QHBoxLayout()
-        self.today_card = self._build_card("Doanh thu hôm nay")
-        self.month_card = self._build_card("Doanh thu tháng")
-        cards.addWidget(self.today_card)
-        cards.addWidget(self.month_card)
-        layout.addLayout(cards)
-
-        panel = QHBoxLayout()
-
-        self.day_table = QTableWidget(0, 2)
-        self.day_table.setHorizontalHeaderLabels(["Ngày", "Doanh thu"])
-        self.day_table.verticalHeader().setVisible(False)
-        self.day_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.day_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.day_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-
-        self.month_table = QTableWidget(0, 2)
-        self.month_table.setHorizontalHeaderLabels(["Tháng", "Doanh thu"])
-        self.month_table.verticalHeader().setVisible(False)
-        self.month_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.month_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.month_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-
-        day_group = QGroupBox("Thống kê theo ngày")
-        day_layout = QVBoxLayout(day_group)
-        day_layout.addWidget(self.day_table)
-
-        month_group = QGroupBox("Thống kê theo tháng")
-        month_layout = QVBoxLayout(month_group)
-        month_layout.addWidget(self.month_table)
-
-        panel.addWidget(day_group)
-        panel.addWidget(month_group)
-        layout.addLayout(panel)
-
-        refresh_btn = QPushButton("Làm mới báo cáo")
-        refresh_btn.clicked.connect(self.refresh_report)
-        layout.addWidget(refresh_btn)
-
-        management_panel = QHBoxLayout()
-
-        customer_group = QGroupBox("Khách hàng đã lưu")
-        customer_layout = QVBoxLayout(customer_group)
-        self.customer_table = QTableWidget(0, 6)
-        self.customer_table.setHorizontalHeaderLabels(
-            ["Họ tên", "Số điện thoại", "Gmail", "Mã số thuế", "Địa chỉ", "Ghi chú"]
+        hero = QFrame()
+        hero.setStyleSheet(
+            "QFrame {"
+            "background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #E0F2FE, stop:1 #F8FAFC);"
+            "border: 1px solid #BFDBFE; border-radius: 16px; }"
+            "QLabel { background: transparent; color: #0F172A; }"
         )
-        self.customer_table.verticalHeader().setVisible(False)
-        self.customer_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.customer_table.setSelectionBehavior(QTableWidget.SelectRows)
-        customer_header = self.customer_table.horizontalHeader()
-        customer_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        customer_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        customer_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        customer_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        customer_header.setSectionResizeMode(4, QHeaderView.Stretch)
-        customer_header.setSectionResizeMode(5, QHeaderView.Stretch)
-        customer_layout.addWidget(self.customer_table)
+        hero_layout = QHBoxLayout(hero)
+        hero_layout.setContentsMargins(18, 10, 18, 10)
+        hero_layout.setSpacing(16)
 
-        invoice_group = QGroupBox("Danh sách hóa đơn")
+        title_label = QLabel("Trung tâm báo cáo")
+        title_label.setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A;")
+
+        hero_refresh_btn = QPushButton("Làm mới dữ liệu")
+        hero_refresh_btn.setMinimumHeight(34)
+        hero_refresh_btn.setStyleSheet(
+            "QPushButton { background: #0F172A; color: white; font-weight: 700; }"
+            "QPushButton:hover { background: #1E293B; }"
+        )
+        hero_refresh_btn.clicked.connect(self.refresh_report)
+
+        hero_layout.addWidget(title_label)
+        hero_layout.addStretch(1)
+        hero_layout.addWidget(hero_refresh_btn)
+        layout.addWidget(hero)
+
+        report_panels = QHBoxLayout()
+        report_panels.setSpacing(12)
+
+        revenue_group = QGroupBox("Báo cáo doanh thu")
+        revenue_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        revenue_group.setFixedHeight(202)
+        revenue_layout = QVBoxLayout(revenue_group)
+        revenue_layout.setContentsMargins(10, 8, 10, 8)
+        revenue_layout.setSpacing(6)
+
+        revenue_controls = QGridLayout()
+        revenue_controls.setSpacing(8)
+        revenue_controls.addWidget(QLabel("Xem theo"), 0, 0)
+
+        self.revenue_period_type_combo = QComboBox()
+        self.revenue_period_type_combo.addItem("Ngày", "day")
+        self.revenue_period_type_combo.addItem("Tháng", "month")
+        self.revenue_period_type_combo.addItem("Năm", "year")
+        self.revenue_period_type_combo.setMinimumWidth(120)
+        revenue_controls.addWidget(self.revenue_period_type_combo, 0, 1)
+
+        revenue_controls.addWidget(QLabel("Kỳ báo cáo"), 0, 2)
+        self.revenue_period_edit = QDateEdit(QDate.currentDate())
+        self.revenue_period_edit.setMinimumWidth(150)
+        revenue_controls.addWidget(self.revenue_period_edit, 0, 3)
+
+        self.export_revenue_report_btn = QPushButton("Xuất báo cáo doanh thu")
+        self.export_revenue_report_btn.setMinimumHeight(38)
+        self.export_revenue_report_btn.setStyleSheet(
+            "QPushButton { background: #0284C7; color: white; }"
+            "QPushButton:hover { background: #0369A1; }"
+        )
+        revenue_controls.addWidget(self.export_revenue_report_btn, 1, 0, 1, 4)
+        revenue_controls.setColumnStretch(1, 1)
+        revenue_controls.setColumnStretch(3, 1)
+        revenue_layout.addLayout(revenue_controls)
+
+        revenue_cards = QHBoxLayout()
+        revenue_cards.setSpacing(6)
+        self.revenue_total_card = self._build_report_metric_card("Tổng doanh thu", "#0EA5E9")
+        self.revenue_count_card = self._build_report_metric_card("Số hóa đơn", "#14B8A6")
+        revenue_cards.addWidget(self.revenue_total_card)
+        revenue_cards.addWidget(self.revenue_count_card)
+        revenue_layout.addLayout(revenue_cards)
+        report_panels.addWidget(revenue_group, 1)
+
+        goods_group = QGroupBox("Báo cáo hàng hóa")
+        goods_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        goods_group.setFixedHeight(202)
+        goods_layout = QVBoxLayout(goods_group)
+        goods_layout.setContentsMargins(10, 8, 10, 8)
+        goods_layout.setSpacing(6)
+
+        goods_controls = QGridLayout()
+        goods_controls.setSpacing(8)
+        goods_controls.addWidget(QLabel("Loại báo cáo"), 0, 0)
+
+        self.goods_report_type_combo = QComboBox()
+        self.goods_report_type_combo.addItem("Sản phẩm đã bán", "sold")
+        self.goods_report_type_combo.addItem("Sản phẩm tồn kho", "stock")
+        self.goods_report_type_combo.setMinimumWidth(150)
+        goods_controls.addWidget(self.goods_report_type_combo, 0, 1)
+
+        goods_controls.addWidget(QLabel("Xem theo"), 0, 2)
+        self.goods_period_type_combo = QComboBox()
+        self.goods_period_type_combo.addItem("Ngày", "day")
+        self.goods_period_type_combo.addItem("Tháng", "month")
+        self.goods_period_type_combo.addItem("Năm", "year")
+        self.goods_period_type_combo.setCurrentIndex(1)
+        self.goods_period_type_combo.setMinimumWidth(120)
+        goods_controls.addWidget(self.goods_period_type_combo, 0, 3)
+
+        goods_controls.addWidget(QLabel("Kỳ báo cáo"), 1, 0)
+        self.goods_period_edit = QDateEdit(QDate.currentDate())
+        self.goods_period_edit.setMinimumWidth(150)
+        goods_controls.addWidget(self.goods_period_edit, 1, 1)
+
+        self.export_goods_report_btn = QPushButton("Xuất báo cáo hàng hóa")
+        self.export_goods_report_btn.setMinimumHeight(38)
+        self.export_goods_report_btn.setStyleSheet(
+            "QPushButton { background: #15803D; color: white; }"
+            "QPushButton:hover { background: #166534; }"
+        )
+        goods_controls.addWidget(self.export_goods_report_btn, 1, 2, 1, 2)
+        goods_controls.setColumnStretch(1, 1)
+        goods_controls.setColumnStretch(3, 1)
+        goods_layout.addLayout(goods_controls)
+
+        goods_cards = QHBoxLayout()
+        goods_cards.setSpacing(6)
+        self.goods_primary_card = self._build_report_metric_card("Tổng số lượng", "#F59E0B")
+        self.goods_secondary_card = self._build_report_metric_card("Giá trị / doanh thu", "#22C55E")
+        goods_cards.addWidget(self.goods_primary_card)
+        goods_cards.addWidget(self.goods_secondary_card)
+        goods_layout.addLayout(goods_cards)
+        report_panels.addWidget(goods_group, 1)
+
+        layout.addLayout(report_panels)
+
+        invoice_group = QGroupBox("Hóa đơn")
         invoice_layout = QVBoxLayout(invoice_group)
-        self.invoice_table = QTableWidget(0, 9)
+        invoice_layout.setSpacing(8)
+
+        invoice_search_layout = QGridLayout()
+        invoice_search_layout.setSpacing(8)
+        invoice_search_layout.addWidget(QLabel("Tìm kiếm"), 0, 0)
+
+        self.invoice_search_edit = QLineEdit()
+        self.invoice_search_edit.setPlaceholderText("Nhập mã hóa đơn, họ tên hoặc số điện thoại")
+        invoice_search_layout.addWidget(self.invoice_search_edit, 0, 1)
+
+        invoice_search_layout.addWidget(QLabel("Lọc theo"), 0, 2)
+
+        self.invoice_filter_type_combo = QComboBox()
+        self.invoice_filter_type_combo.addItem("Tất cả", "all")
+        self.invoice_filter_type_combo.addItem("Ngày", "day")
+        self.invoice_filter_type_combo.addItem("Tháng", "month")
+        self.invoice_filter_type_combo.setMinimumWidth(110)
+        invoice_search_layout.addWidget(self.invoice_filter_type_combo, 0, 3)
+
+        self.invoice_filter_date_edit = QDateEdit(QDate.currentDate())
+        self.invoice_filter_date_edit.setMinimumWidth(130)
+        invoice_search_layout.addWidget(self.invoice_filter_date_edit, 0, 4)
+
+        invoice_search_layout.setColumnStretch(1, 1)
+        layout.addWidget(invoice_group)
+        invoice_layout.addLayout(invoice_search_layout)
+
+        self.invoice_suggestion_list = QListWidget()
+        self.invoice_suggestion_list.setAlternatingRowColors(True)
+        self.invoice_suggestion_list.setMaximumHeight(112)
+        self.invoice_suggestion_list.hide()
+        invoice_layout.addWidget(self.invoice_suggestion_list)
+
+        self.invoice_table = QTableWidget(0, 6)
         self.invoice_table.setHorizontalHeaderLabels(
-            [
-                "Số hóa đơn",
-                "Ngày tạo",
-                "Khách hàng",
-                "Số điện thoại",
-                "Gmail",
-                "Mã số thuế",
-                "Địa chỉ",
-                "Tổng tiền",
-                "Số dòng",
-            ]
+            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền", "Xem hóa đơn"]
         )
         self.invoice_table.verticalHeader().setVisible(False)
         self.invoice_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.invoice_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.invoice_table.setAlternatingRowColors(True)
         invoice_header = self.invoice_table.horizontalHeader()
         invoice_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        invoice_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(2, QHeaderView.Stretch)
         invoice_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        invoice_header.setSectionResizeMode(6, QHeaderView.Stretch)
-        invoice_header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
-        invoice_header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
+        self.invoice_table.setMinimumHeight(202)
         invoice_layout.addWidget(self.invoice_table)
 
-        invoice_actions = QHBoxLayout()
+        self.revenue_period_type_combo.currentIndexChanged.connect(self._on_revenue_period_changed)
+        self.revenue_period_edit.dateChanged.connect(lambda _date: self.refresh_report())
+        self.export_revenue_report_btn.clicked.connect(self._export_revenue_report)
 
-        self.view_invoice_detail_btn = QPushButton("Xem chi tiết hóa đơn")
-        self.view_invoice_detail_btn.setEnabled(False)
-        self.view_invoice_detail_btn.clicked.connect(self._show_selected_invoice_detail)
-        invoice_actions.addWidget(self.view_invoice_detail_btn)
+        self.goods_report_type_combo.currentIndexChanged.connect(self._on_goods_report_mode_changed)
+        self.goods_period_type_combo.currentIndexChanged.connect(self._on_goods_period_changed)
+        self.goods_period_edit.dateChanged.connect(lambda _date: self.refresh_report())
+        self.export_goods_report_btn.clicked.connect(self._export_goods_report)
 
-        self.export_selected_invoice_btn = QPushButton("Xuất lại file Word")
-        self.export_selected_invoice_btn.setEnabled(False)
-        self.export_selected_invoice_btn.clicked.connect(self._export_selected_invoice_docx)
-        invoice_actions.addWidget(self.export_selected_invoice_btn)
+        self.invoice_search_edit.textChanged.connect(lambda _text: self._refresh_invoice_search_results())
+        self.invoice_filter_type_combo.currentIndexChanged.connect(self._on_invoice_filter_changed)
+        self.invoice_filter_date_edit.dateChanged.connect(lambda _date: self._refresh_invoice_search_results())
+        self.invoice_suggestion_list.itemClicked.connect(self._on_invoice_suggestion_clicked)
 
-        self.report_export_dir_label = QLabel(str(self.invoice_export_dir))
-        self.report_export_dir_label.setWordWrap(True)
-        invoice_actions.addWidget(self.report_export_dir_label, 1)
-
-        self.choose_export_dir_from_list_btn = QPushButton("Chọn nơi lưu file")
-        self.choose_export_dir_from_list_btn.clicked.connect(self._choose_invoice_export_dir)
-        invoice_actions.addWidget(self.choose_export_dir_from_list_btn)
-
-        self.invoice_table.itemSelectionChanged.connect(self._sync_invoice_action_state)
-        self.invoice_table.itemDoubleClicked.connect(lambda _item: self._show_selected_invoice_detail())
-        invoice_layout.addLayout(invoice_actions)
-
-        management_panel.addWidget(customer_group)
-        management_panel.addWidget(invoice_group)
-        layout.addLayout(management_panel)
+        self._on_revenue_period_changed()
+        self._on_goods_period_changed()
+        self._sync_goods_report_mode()
+        self._on_invoice_filter_changed()
 
         return page
 
-    def _build_card(self, title: str) -> QFrame:
+    def _build_report_metric_card(self, title: str, accent_color: str) -> QFrame:
         card = QFrame()
-        card.setFrameShape(QFrame.StyledPanel)
+        card.setFixedHeight(66)
         card.setStyleSheet(
-            "QFrame { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-            "stop:0 #1D4ED8, stop:1 #0EA5E9); border-radius: 14px; }"
-            "QLabel { background: transparent; color: white; }"
+            f"QFrame {{ background: #FFFFFF; border: 1px solid #E2E8F0; border-left: 6px solid {accent_color}; border-radius: 14px; }}"
+            "QLabel { background: transparent; color: #0F172A; }"
         )
         card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(10, 4, 10, 2)
+        card_layout.setSpacing(0)
         title_label = QLabel(title)
+        title_label.setWordWrap(True)
+        title_label.setStyleSheet("font-size: 13px; font-weight: 600; color: #334155;")
         value_label = QLabel("0")
-        value_label.setProperty("cardValue", True)
-        value_label.setAlignment(Qt.AlignRight)
+        value_label.setStyleSheet("font-size: 17px; font-weight: 800; color: #0F172A;")
+        note_label = QLabel("")
+        note_label.setWordWrap(True)
+        note_label.setStyleSheet("font-size: 13px; color: #64748B;")
         card_layout.addWidget(title_label)
         card_layout.addWidget(value_label)
-        card_layout.addStretch()
+        card_layout.addWidget(note_label)
         card.value_label = value_label  # type: ignore[attr-defined]
+        card.note_label = note_label  # type: ignore[attr-defined]
         return card
 
     def _bind_runtime_clock(self) -> None:
@@ -574,6 +719,246 @@ class MainWindow(QMainWindow):
 
     def _refresh_clock(self) -> None:
         self.order_created_at.setText(now_iso_utc7())
+
+    def _apply_period_editor_format(self, editor: QDateEdit, period_type: str) -> None:
+        if period_type == "day":
+            editor.setDisplayFormat("dd/MM/yyyy")
+            editor.setCalendarPopup(True)
+        elif period_type == "month":
+            editor.setDisplayFormat("MM/yyyy")
+            editor.setCalendarPopup(True)
+        elif period_type == "all":
+            editor.setDisplayFormat("dd/MM/yyyy")
+            editor.setCalendarPopup(True)
+        else:
+            editor.setDisplayFormat("yyyy")
+            editor.setCalendarPopup(False)
+
+    def _selected_period(self, combo: QComboBox, editor: QDateEdit) -> tuple[str, str]:
+        period_type = str(combo.currentData() or "day")
+        date_value = editor.date()
+        if period_type == "day":
+            return period_type, date_value.toString("yyyy-MM-dd")
+        if period_type == "month":
+            return period_type, date_value.toString("yyyy-MM")
+        return period_type, date_value.toString("yyyy")
+
+    def _period_label(self, period_type: str, period_value: str) -> str:
+        if period_type == "day":
+            year, month, day = period_value.split("-")
+            return f"Ngày {day}/{month}/{year}"
+        if period_type == "month":
+            year, month = period_value.split("-")
+            return f"Tháng {month}/{year}"
+        return f"Năm {period_value}"
+
+    def _set_metric_card_value(self, card: QFrame, value_text: str, note_text: str) -> None:
+        card.value_label.setText(value_text)  # type: ignore[attr-defined]
+        card.note_label.setText(note_text)  # type: ignore[attr-defined]
+        card.note_label.setVisible(bool(note_text))  # type: ignore[attr-defined]
+
+    def _on_revenue_period_changed(self) -> None:
+        period_type = str(self.revenue_period_type_combo.currentData() or "day")
+        self._apply_period_editor_format(self.revenue_period_edit, period_type)
+        self.refresh_report()
+
+    def _on_goods_period_changed(self) -> None:
+        period_type = str(self.goods_period_type_combo.currentData() or "day")
+        self._apply_period_editor_format(self.goods_period_edit, period_type)
+        self.refresh_report()
+
+    def _sync_goods_report_mode(self) -> None:
+        report_type = str(self.goods_report_type_combo.currentData() or "sold")
+        use_period = report_type == "sold"
+        self.goods_period_type_combo.setEnabled(use_period)
+        self.goods_period_edit.setEnabled(use_period)
+
+    def _selected_invoice_filter(self) -> tuple[str, str]:
+        period_type = str(self.invoice_filter_type_combo.currentData() or "all")
+        if period_type == "all":
+            return period_type, ""
+        if period_type == "day":
+            return period_type, self.invoice_filter_date_edit.date().toString("yyyy-MM-dd")
+        return period_type, self.invoice_filter_date_edit.date().toString("yyyy-MM")
+
+    def _on_invoice_filter_changed(self) -> None:
+        period_type = str(self.invoice_filter_type_combo.currentData() or "all")
+        self._apply_period_editor_format(self.invoice_filter_date_edit, period_type)
+        self.invoice_filter_date_edit.setEnabled(period_type != "all")
+        self._refresh_invoice_search_results()
+
+    def _refresh_invoice_search_results(self, keyword: str | None = None) -> None:
+        normalized_keyword = (keyword if keyword is not None else self.invoice_search_edit.text()).strip()
+        filter_type, filter_value = self._selected_invoice_filter()
+        invoices = self.order_controller.search_invoices(normalized_keyword, filter_type, filter_value)
+        self._render_invoice_rows(invoices)
+
+        self.invoice_suggestion_list.clear()
+        if not normalized_keyword:
+            self.invoice_suggestion_list.hide()
+            return
+
+        for invoice in invoices[:10]:
+            label = (
+                f"{invoice['invoice_no']} | {invoice['customer_name']} | {invoice.get('phone', '')} | {invoice['created_at']}"
+            )
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole, invoice["invoice_no"])
+            self.invoice_suggestion_list.addItem(item)
+
+        self.invoice_suggestion_list.setVisible(self.invoice_suggestion_list.count() > 0)
+        if self.invoice_suggestion_list.count() > 0:
+            self.invoice_suggestion_list.setCurrentRow(0)
+
+    def _on_invoice_suggestion_clicked(self, item: QListWidgetItem) -> None:
+        invoice_no = item.data(Qt.UserRole)
+        if not invoice_no:
+            return
+        self.invoice_search_edit.setText(str(invoice_no))
+        self.invoice_suggestion_list.hide()
+
+    def _render_invoice_rows(self, invoices: list[dict]) -> None:
+        self.invoice_table.setRowCount(len(invoices))
+        for row, invoice in enumerate(invoices):
+            values = [
+                invoice["invoice_no"],
+                invoice["created_at"],
+                invoice["customer_name"],
+                invoice.get("phone", ""),
+                format_money(invoice["total_amount"]),
+            ]
+            for col, value in enumerate(values):
+                self.invoice_table.setItem(row, col, QTableWidgetItem(value))
+
+            view_btn = QPushButton("Xem hóa đơn")
+            view_btn.setStyleSheet(
+                "QPushButton { background: #E0F2FE; color: #075985; font-weight: 700; }"
+                "QPushButton:hover { background: #BAE6FD; }"
+            )
+            view_btn.clicked.connect(
+                lambda checked=False, invoice_no=invoice["invoice_no"]: self._open_invoice_preview(invoice_no)
+            )
+            self.invoice_table.setCellWidget(row, 5, view_btn)
+
+    def _open_invoice_preview(self, invoice_no: str) -> None:
+        detail = self.order_controller.get_invoice_detail(invoice_no)
+        if not detail:
+            QMessageBox.warning(self, "Không tìm thấy", "Không lấy được chi tiết hóa đơn")
+            return
+
+        try:
+            preview_dialog = InvoicePreviewDialog(detail["invoice"], detail["items"], self)
+            preview_dialog.exec()
+            if not preview_dialog.confirmed:
+                return
+
+            export_path = export_invoice_docx(
+                detail["invoice"],
+                detail["items"],
+                self.invoice_export_dir,
+            )
+            QMessageBox.information(
+                self,
+                "Thành công",
+                f"Đã xuất file Word cho hóa đơn {invoice_no}\nFile Word: {export_path}",
+            )
+        except Exception as exc:  # pragma: no cover - dialog feedback
+            QMessageBox.critical(self, "Lỗi", str(exc))
+
+    def _on_goods_report_mode_changed(self) -> None:
+        self._sync_goods_report_mode()
+        self.refresh_report()
+
+    def _write_csv_report(self, file_name: str, rows: list[list[str]]) -> Path:
+        self.invoice_export_dir.mkdir(parents=True, exist_ok=True)
+        report_path = self.invoice_export_dir / file_name
+        with report_path.open("w", newline="", encoding="utf-8-sig") as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerows(rows)
+        return report_path
+
+    def _export_revenue_report(self) -> None:
+        period_type = getattr(self, "_current_revenue_period_type", "day")
+        period_value = getattr(self, "_current_revenue_period_value", QDate.currentDate().toString("yyyy-MM-dd"))
+        summary = getattr(self, "_current_revenue_summary", {"invoice_count": 0, "total_amount": 0})
+        rows = getattr(self, "_current_revenue_rows", [])
+        period_label = self._period_label(period_type, period_value)
+
+        csv_rows = [
+            ["Báo cáo doanh thu"],
+            ["Kỳ báo cáo", period_label],
+            ["Số hóa đơn", str(summary["invoice_count"])],
+            ["Tổng doanh thu", format_money(summary["total_amount"])],
+            [],
+            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền"],
+        ]
+        csv_rows.extend(
+            [
+                item["invoice_no"],
+                item["created_at"],
+                item["customer_name"],
+                item.get("phone", ""),
+                format_money(item["total_amount"]),
+            ]
+            for item in rows
+        )
+
+        file_name = f"bao_cao_doanh_thu_{period_type}_{period_value}.csv"
+        report_path = self._write_csv_report(file_name, csv_rows)
+        QMessageBox.information(self, "Xuất thành công", f"Đã lưu báo cáo tại:\n{report_path}")
+
+    def _export_goods_report(self) -> None:
+        report_type = getattr(self, "_current_goods_report_type", "sold")
+        rows = getattr(self, "_current_goods_rows", [])
+
+        if report_type == "sold":
+            period_type = getattr(self, "_current_goods_period_type", "day")
+            period_value = getattr(self, "_current_goods_period_value", QDate.currentDate().toString("yyyy-MM-dd"))
+            summary = getattr(self, "_current_goods_summary", {"product_count": 0, "total_quantity": 0, "total_amount": 0})
+            period_label = self._period_label(period_type, period_value)
+            csv_rows = [
+                ["Báo cáo hàng hóa - Sản phẩm đã bán"],
+                ["Kỳ báo cáo", period_label],
+                ["Số sản phẩm", str(summary["product_count"])],
+                ["Tổng số lượng bán", str(summary["total_quantity"])],
+                ["Tổng doanh thu", format_money(summary["total_amount"])],
+                [],
+                ["Mã hàng", "Tên hàng", "Đơn vị", "Số lượng bán", "Doanh thu"],
+            ]
+            csv_rows.extend(
+                [
+                    item["product_code"],
+                    item["product_name"],
+                    item.get("unit", ""),
+                    str(item["sold_quantity"]),
+                    format_money(item["sold_amount"]),
+                ]
+                for item in rows
+            )
+            file_name = f"bao_cao_hang_hoa_da_ban_{period_type}_{period_value}.csv"
+        else:
+            summary = getattr(self, "_current_goods_summary", {"product_count": 0, "total_quantity": 0, "total_value": 0})
+            csv_rows = [
+                ["Báo cáo hàng hóa - Sản phẩm tồn kho"],
+                ["Số sản phẩm", str(summary["product_count"])],
+                ["Tổng số lượng tồn", str(summary["total_quantity"])],
+                ["Tổng giá trị tồn kho", format_money(summary["total_value"])],
+                [],
+                ["Mã hàng", "Tên hàng", "Số lượng", "Đơn giá"],
+            ]
+            csv_rows.extend(
+                [
+                    item["product_code"],
+                    item["name"],
+                    str(item["quantity"]),
+                    format_money(item["sale_price"]),
+                ]
+                for item in rows
+            )
+            file_name = f"bao_cao_ton_kho_{QDate.currentDate().toString('yyyy-MM-dd')}.csv"
+
+        report_path = self._write_csv_report(file_name, csv_rows)
+        QMessageBox.information(self, "Xuất thành công", f"Đã lưu báo cáo tại:\n{report_path}")
 
     def _switch_tab(self, idx: int) -> None:
         self.stack.setCurrentIndex(idx)
@@ -1004,57 +1389,76 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_report(self) -> None:
-        summary = self.report_controller.summary()
-        self.today_card.value_label.setText(format_money(summary["today"]))  # type: ignore[attr-defined]
-        self.month_card.value_label.setText(format_money(summary["month"]))  # type: ignore[attr-defined]
+        revenue_period_type, revenue_period_value = self._selected_period(
+            self.revenue_period_type_combo,
+            self.revenue_period_edit,
+        )
+        revenue_label = self._period_label(revenue_period_type, revenue_period_value)
+        revenue_report = self.report_controller.revenue_report(revenue_period_type, revenue_period_value)
+        self._current_revenue_period_type = revenue_period_type
+        self._current_revenue_period_value = revenue_period_value
+        self._current_revenue_rows = revenue_report["rows"]
+        self._current_revenue_summary = revenue_report
 
-        by_day = self.report_controller.by_day()
-        by_month = self.report_controller.by_month()
+        self._set_metric_card_value(
+            self.revenue_total_card,
+            format_money(revenue_report["total_amount"]),
+            "",
+        )
+        self._set_metric_card_value(
+            self.revenue_count_card,
+            str(revenue_report["invoice_count"]),
+            "",
+        )
 
-        self.day_table.setRowCount(len(by_day))
-        for row, item in enumerate(by_day):
-            self.day_table.setItem(row, 0, QTableWidgetItem(item["day"]))
-            self.day_table.setItem(row, 1, QTableWidgetItem(format_money(item["total"])))
+        goods_report_type = str(self.goods_report_type_combo.currentData() or "sold")
+        self._current_goods_report_type = goods_report_type
 
-        self.month_table.setRowCount(len(by_month))
-        for row, item in enumerate(by_month):
-            self.month_table.setItem(row, 0, QTableWidgetItem(item["month"]))
-            self.month_table.setItem(row, 1, QTableWidgetItem(format_money(item["total"])))
+        if goods_report_type == "sold":
+            goods_period_type, goods_period_value = self._selected_period(
+                self.goods_period_type_combo,
+                self.goods_period_edit,
+            )
+            goods_label = self._period_label(goods_period_type, goods_period_value)
+            goods_report = self.report_controller.sold_products_report(goods_period_type, goods_period_value)
+            self._current_goods_period_type = goods_period_type
+            self._current_goods_period_value = goods_period_value
+            self._current_goods_rows = goods_report["rows"]
+            self._current_goods_summary = goods_report
 
-        customers = self.order_controller.list_customers()
-        self.customer_table.setRowCount(len(customers))
-        for row, customer in enumerate(customers):
-            values = [
-                customer.get("full_name", ""),
-                customer.get("phone", ""),
-                customer.get("email", ""),
-                customer.get("tax_code", ""),
-                customer.get("address", ""),
-                customer.get("note", ""),
-            ]
-            for col, value in enumerate(values):
-                self.customer_table.setItem(row, col, QTableWidgetItem(value))
+            self._set_metric_card_value(
+                self.goods_primary_card,
+                str(goods_report["total_quantity"]),
+                "",
+            )
+            self._set_metric_card_value(
+                self.goods_secondary_card,
+                format_money(goods_report["total_amount"]),
+                "",
+            )
+        else:
+            stock_report = self.report_controller.stock_products_report()
+            self._current_goods_rows = stock_report["rows"]
+            self._current_goods_summary = stock_report
+            self._current_goods_period_type = ""
+            self._current_goods_period_value = ""
 
-        invoices = self.order_controller.list_invoices()
-        self.invoice_table.setRowCount(len(invoices))
-        for row, invoice in enumerate(invoices):
-            values = [
-                invoice["invoice_no"],
-                invoice["created_at"],
-                invoice["customer_name"],
-                invoice.get("phone", ""),
-                invoice.get("email", ""),
-                invoice.get("tax_code", ""),
-                invoice.get("address", ""),
-                format_money(invoice["total_amount"]),
-                str(invoice["item_count"]),
-            ]
-            for col, value in enumerate(values):
-                self.invoice_table.setItem(row, col, QTableWidgetItem(value))
+            self._set_metric_card_value(
+                self.goods_primary_card,
+                str(stock_report["total_quantity"]),
+                "",
+            )
+            self._set_metric_card_value(
+                self.goods_secondary_card,
+                format_money(stock_report["total_value"]),
+                "",
+            )
 
-        self._sync_invoice_action_state()
+        self._refresh_invoice_search_results(self.invoice_search_edit.text())
 
     def _selected_invoice_no(self) -> str | None:
+        if getattr(self, "invoice_table", None) is None:
+            return None
         selected = self.invoice_table.selectedItems()
         if not selected:
             return None
@@ -1064,8 +1468,10 @@ class MainWindow(QMainWindow):
 
     def _sync_invoice_action_state(self) -> None:
         has_selected_invoice = self._selected_invoice_no() is not None
-        self.view_invoice_detail_btn.setEnabled(has_selected_invoice)
-        self.export_selected_invoice_btn.setEnabled(has_selected_invoice)
+        if getattr(self, "view_invoice_detail_btn", None) is not None:
+            self.view_invoice_detail_btn.setEnabled(has_selected_invoice)
+        if getattr(self, "export_selected_invoice_btn", None) is not None:
+            self.export_selected_invoice_btn.setEnabled(has_selected_invoice)
 
     def _load_invoice_export_dir(self) -> Path:
         stored_path = self._settings.value("invoice_export_dir", str(EXPORT_DIR), type=str)
@@ -1147,6 +1553,27 @@ class MainWindow(QMainWindow):
         self.order_table.setColumnWidth(5, 150)
         self.order_table.setColumnWidth(6, 88)
 
+    def _apply_payment_summary_fonts(self) -> None:
+        top_row_font = QFont("Times New Roman")
+        top_row_font.setPixelSize(13)
+
+        bottom_row_font = QFont("Times New Roman")
+        bottom_row_font.setPixelSize(14)
+        bottom_row_font.setBold(True)
+
+        for widget in [
+            getattr(self, "total_goods_text_label", None),
+            getattr(self, "total_goods_label", None),
+            getattr(self, "ship_fee_text_label", None),
+            getattr(self, "ship_fee_spin", None),
+        ]:
+            if widget is not None:
+                widget.setFont(top_row_font)
+
+        for widget in [getattr(self, "total_all_text_label", None), getattr(self, "total_all_label", None)]:
+            if widget is not None:
+                widget.setFont(bottom_row_font)
+
     def _sync_font_by_window_size(self) -> None:
         width_factor = self.width() / 72
         height_factor = self.height() / 48
@@ -1159,11 +1586,7 @@ class MainWindow(QMainWindow):
         font.setPixelSize(px)
         app.setFont(font)
 
-        highlight_font = QFont(font)
-        highlight_font.setPixelSize(px + 2)
-        for widget in [getattr(self, "total_goods_text_label", None), getattr(self, "total_goods_label", None)]:
-            if widget is not None:
-                widget.setFont(highlight_font)
+        self._apply_payment_summary_fonts()
 
         export_font = QFont(font)
         export_font.setPixelSize(px + 2)

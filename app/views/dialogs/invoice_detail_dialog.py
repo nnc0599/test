@@ -17,6 +17,9 @@ def format_money(value: int) -> str:
     return f"{int(value):,}".replace(",", ".")
 
 
+LIST_ROW_HEIGHT_PX = 35
+
+
 class InvoiceDetailDialog(QDialog):
     def __init__(self, detail: dict, parent=None):
         super().__init__(parent)
@@ -45,6 +48,8 @@ class InvoiceDetailDialog(QDialog):
             ["Mã sản phẩm", "Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền"]
         )
         self.items_table.verticalHeader().setVisible(False)
+        self.items_table.verticalHeader().setDefaultSectionSize(LIST_ROW_HEIGHT_PX)
+        self.items_table.verticalHeader().setMinimumSectionSize(LIST_ROW_HEIGHT_PX)
         self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
         header = self.items_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)

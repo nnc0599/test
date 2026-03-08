@@ -17,6 +17,9 @@ def format_money(value: int) -> str:
     return f"{int(value):,}".replace(",", ".")
 
 
+LIST_ROW_HEIGHT_PX = 35
+
+
 class ProductHistoryDialog(QDialog):
     def __init__(self, product: dict, history_rows: list[dict], parent=None):
         super().__init__(parent)
@@ -52,6 +55,8 @@ class ProductHistoryDialog(QDialog):
             ]
         )
         self.history_table.verticalHeader().setVisible(False)
+        self.history_table.verticalHeader().setDefaultSectionSize(LIST_ROW_HEIGHT_PX)
+        self.history_table.verticalHeader().setMinimumSectionSize(LIST_ROW_HEIGHT_PX)
         self.history_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.history_table.setSelectionBehavior(QTableWidget.SelectRows)
         header = self.history_table.horizontalHeader()
