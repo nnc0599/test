@@ -265,8 +265,8 @@ def _add_report_meta_table(doc: Document, rows: list[tuple[str, str]]) -> None:
 
     for row_index, (label, value) in enumerate(rows):
         _shade_cell(table.cell(row_index, 0), "E2E8F0")
-        _set_cell_text(table.cell(row_index, 0), label, bold=True)
-        _set_cell_text(table.cell(row_index, 1), value)
+        _set_cell_text(table.cell(row_index, 0), label, alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+        _set_cell_text(table.cell(row_index, 1), value, alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
 
 def _add_report_data_table(
@@ -276,7 +276,6 @@ def _add_report_data_table(
     column_widths_cm: list[float],
     centered_columns: set[int] | None = None,
 ) -> None:
-    centered_columns = centered_columns or set()
     table = doc.add_table(rows=1, cols=len(headers))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.autofit = False
@@ -288,8 +287,7 @@ def _add_report_data_table(
     for index, header in enumerate(headers):
         header_cell = table.rows[0].cells[index]
         _shade_cell(header_cell, "DCE6F1")
-        alignment = WD_ALIGN_PARAGRAPH.CENTER if index in centered_columns else WD_ALIGN_PARAGRAPH.CENTER
-        _set_cell_text(header_cell, header, alignment=alignment, bold=True)
+        _set_cell_text(header_cell, header, alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
 
     if not data_rows:
         row = table.add_row()
@@ -307,8 +305,7 @@ def _add_report_data_table(
     for values in data_rows:
         row = table.add_row()
         for col_index, value in enumerate(values):
-            alignment = WD_ALIGN_PARAGRAPH.CENTER if col_index in centered_columns else None
-            _set_cell_text(row.cells[col_index], value, alignment=alignment)
+            _set_cell_text(row.cells[col_index], value, alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
 
 def _add_signature_section(doc: Document, generated_at_text: str) -> None:
