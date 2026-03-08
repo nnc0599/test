@@ -9,7 +9,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 from docx import Document
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -110,6 +110,7 @@ def _set_paragraph_text(paragraph, text: str, alignment=None, bold: bool | None 
     paragraph.text = text
     if alignment is not None:
         paragraph.alignment = alignment
+    paragraph.paragraph_format.space_after = Pt(0)
     for run in paragraph.runs:
         _set_run_font(run, bold=bold, italic=italic)
 
@@ -154,6 +155,7 @@ def _set_cell_text(
     for paragraph in cell.paragraphs:
         if alignment is not None:
             paragraph.alignment = alignment
+        paragraph.paragraph_format.space_after = Pt(0)
         for run in paragraph.runs:
             _set_run_font(run, bold=bold, italic=italic)
 
@@ -162,6 +164,7 @@ def _set_paragraph_segments(paragraph, segments: list[tuple[str, bool | None, bo
     paragraph.clear()
     if alignment is not None:
         paragraph.alignment = alignment
+    paragraph.paragraph_format.space_after = Pt(0)
     for text, bold, italic in segments:
         run = paragraph.add_run(text)
         _set_run_font(run, bold=bold, italic=italic)
@@ -175,11 +178,19 @@ def _set_cell_segments(cell, segments: list[tuple[str, bool | None, bool | None]
     paragraph.clear()
     if alignment is not None:
         paragraph.alignment = alignment
+    paragraph.paragraph_format.space_after = Pt(0)
     for extra_paragraph in cell.paragraphs[1:]:
         _remove_paragraph(extra_paragraph)
     for text, bold, italic in segments:
         run = paragraph.add_run(text)
         _set_run_font(run, bold=bold, italic=italic)
+
+
+def _set_table_row_height(table, height_cm: float) -> None:
+    row_height = Cm(height_cm)
+    for row in table.rows:
+        row.height = row_height
+        row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
 
 
 def _remove_paragraph(paragraph) -> None:
@@ -266,6 +277,7 @@ def _add_report_meta_table(doc: Document, rows: list[tuple[str, str]]) -> None:
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.autofit = False
     _set_table_grid_borders(table, color="CBD5E1")
+    _set_table_row_height(table, 0.7)
 
     widths = [Cm(4.2), Cm(12.0)]
     for row in table.rows:
@@ -300,6 +312,7 @@ def _add_report_data_table(
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.autofit = False
     _set_table_grid_borders(table, color="94A3B8")
+    _set_table_row_height(table, 0.7)
 
     for index, width in enumerate(column_widths_cm):
         table.rows[0].cells[index].width = Cm(width)
@@ -317,6 +330,8 @@ def _add_report_data_table(
 
     if not data_rows:
         row = table.add_row()
+        row.height = Cm(0.7)
+        row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
         empty_cell = row.cells[0]
         if len(headers) > 1:
             empty_cell = row.cells[0].merge(row.cells[len(headers) - 1])
@@ -331,6 +346,8 @@ def _add_report_data_table(
 
     for values in data_rows:
         row = table.add_row()
+        row.height = Cm(0.7)
+        row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
         for col_index, value in enumerate(values):
             _set_cell_text(
                 row.cells[col_index],
