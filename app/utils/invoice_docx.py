@@ -25,7 +25,7 @@ EXPORT_DIR = ROOT_DIR / "data" / "exported_invoices"
 PREVIEW_ASSET_DIR = ROOT_DIR / "data" / ".preview_assets"
 SCREEN_IMAGE_PATH = ROOT_DIR / "Screen.png"
 
-
+    
 def format_money(value: int) -> str:
     return f"{int(value):,}".replace(",", ".")
 
