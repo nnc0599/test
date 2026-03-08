@@ -9,7 +9,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 from docx import Document
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -140,8 +140,17 @@ def _set_run_font(run, bold: bool | None = None, italic: bool | None = None) -> 
     size_cs.set(qn("w:val"), "24")
 
 
-def _set_cell_text(cell, text: str, alignment=None, bold: bool | None = None, italic: bool | None = None) -> None:
+def _set_cell_text(
+    cell,
+    text: str,
+    alignment=None,
+    bold: bool | None = None,
+    italic: bool | None = None,
+    vertical_alignment=None,
+) -> None:
     cell.text = text
+    if vertical_alignment is not None:
+        cell.vertical_alignment = vertical_alignment
     for paragraph in cell.paragraphs:
         if alignment is not None:
             paragraph.alignment = alignment
@@ -265,8 +274,19 @@ def _add_report_meta_table(doc: Document, rows: list[tuple[str, str]]) -> None:
 
     for row_index, (label, value) in enumerate(rows):
         _shade_cell(table.cell(row_index, 0), "E2E8F0")
-        _set_cell_text(table.cell(row_index, 0), label, alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
-        _set_cell_text(table.cell(row_index, 1), value, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+        _set_cell_text(
+            table.cell(row_index, 0),
+            label,
+            alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            bold=True,
+            vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER,
+        )
+        _set_cell_text(
+            table.cell(row_index, 1),
+            value,
+            alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER,
+        )
 
 
 def _add_report_data_table(
@@ -287,7 +307,13 @@ def _add_report_data_table(
     for index, header in enumerate(headers):
         header_cell = table.rows[0].cells[index]
         _shade_cell(header_cell, "DCE6F1")
-        _set_cell_text(header_cell, header, alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+        _set_cell_text(
+            header_cell,
+            header,
+            alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            bold=True,
+            vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER,
+        )
 
     if not data_rows:
         row = table.add_row()
@@ -299,13 +325,19 @@ def _add_report_data_table(
             "Không có dữ liệu trong kỳ báo cáo đã chọn.",
             alignment=WD_ALIGN_PARAGRAPH.CENTER,
             italic=True,
+            vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER,
         )
         return
 
     for values in data_rows:
         row = table.add_row()
         for col_index, value in enumerate(values):
-            _set_cell_text(row.cells[col_index], value, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+            _set_cell_text(
+                row.cells[col_index],
+                value,
+                alignment=WD_ALIGN_PARAGRAPH.CENTER,
+                vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER,
+            )
 
 
 def _add_signature_section(doc: Document, generated_at_text: str) -> None:
