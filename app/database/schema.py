@@ -44,8 +44,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     quantity INTEGER NOT NULL,
     unit_price INTEGER NOT NULL,
     line_total INTEGER NOT NULL,
-    FOREIGN KEY (invoice_no) REFERENCES invoices(invoice_no) ON DELETE CASCADE,
-    FOREIGN KEY (product_code) REFERENCES products(product_code)
+    FOREIGN KEY (invoice_no) REFERENCES invoices(invoice_no) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS payments (
@@ -155,10 +154,49 @@ def _ensure_missing_columns(conn) -> None:
             )
 
 
+def _invoice_items_has_product_fk(conn) -> bool:
+    rows = conn.execute("PRAGMA foreign_key_list(invoice_items)").fetchall()
+    return any(row[2] == "products" for row in rows)
+
+
+def _migrate_invoice_items_without_product_fk(conn) -> None:
+    if not _invoice_items_has_product_fk(conn):
+        return
+
+    conn.execute("ALTER TABLE invoice_items RENAME TO invoice_items_old")
+    conn.execute(
+        """
+        CREATE TABLE invoice_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_no TEXT NOT NULL,
+            product_code TEXT NOT NULL,
+            product_name TEXT NOT NULL,
+            unit TEXT,
+            quantity INTEGER NOT NULL,
+            unit_price INTEGER NOT NULL,
+            line_total INTEGER NOT NULL,
+            FOREIGN KEY (invoice_no) REFERENCES invoices(invoice_no) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO invoice_items (
+            id, invoice_no, product_code, product_name, unit, quantity, unit_price, line_total
+        )
+        SELECT
+            id, invoice_no, product_code, product_name, unit, quantity, unit_price, line_total
+        FROM invoice_items_old
+        """
+    )
+    conn.execute("DROP TABLE invoice_items_old")
+
+
 def init_schema() -> None:
     with get_connection() as conn:
         conn.executescript(SCHEMA_SQL)
         _ensure_missing_columns(conn)
+        _migrate_invoice_items_without_product_fk(conn)
 
 
 def seed_sample_products() -> None:
