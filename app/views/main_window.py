@@ -894,10 +894,10 @@ class MainWindow(QMainWindow):
                 ("Số hóa đơn", str(summary["invoice_count"])),
                 ("Tổng doanh thu", format_money(summary["total_amount"])),
             ],
-            headers=["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền"],
+            headers=["Số hóa đơn", "Ngày tạo", "Khách hàng", "SĐT", "Tổng tiền"],
             data_rows=data_rows,
             output_name=file_name,
-            column_widths_cm=[2.5, 3.2, 4.8, 2.6, 4.3],
+            column_widths_cm=[2.5, 4.0, 6.0, 2.8, 2.8],
             centered_columns={0, 1, 3, 4},
             output_dir=self.invoice_export_dir,
         )
@@ -929,8 +929,8 @@ class MainWindow(QMainWindow):
                 ("Tổng số lượng bán", str(summary["total_quantity"])),
                 ("Tổng doanh thu", format_money(summary["total_amount"])),
             ]
-            headers = ["Mã hàng", "Tên hàng", "Đơn vị", "Số lượng bán", "Doanh thu"]
-            column_widths_cm = [2.4, 5.8, 1.8, 2.7, 4.7]
+            headers = ["Mã hàng", "Tên hàng", "Đơn vị", "Số lượng", "Doanh thu"]
+            column_widths_cm = [3.8, 7.4, 1.8, 2.2, 2.8]
             centered_columns = {0, 2, 3, 4}
         else:
             summary = getattr(self, "_current_goods_summary", {"product_count": 0, "total_quantity": 0, "total_value": 0})
@@ -952,7 +952,7 @@ class MainWindow(QMainWindow):
                 ("Tổng giá trị tồn kho", format_money(summary["total_value"])),
             ]
             headers = ["Mã hàng", "Tên hàng", "Số lượng", "Đơn giá"]
-            column_widths_cm = [2.6, 7.3, 2.4, 4.7]
+            column_widths_cm = [4.0, 8.5, 2.3, 2.9]
             centered_columns = {0, 2, 3}
 
         report_path = export_report_docx(
