@@ -567,20 +567,21 @@ def _load_template_preview_assets() -> dict:
                 account_label = header_table.cell(0, 2).text.strip() or account_label
 
         with ZipFile(TEMPLATE_PATH) as archive:
-            media_names = sorted(
-                name
-                for name in archive.namelist()
-                if name.startswith("word/media/") and not name.endswith("/")
-            )
-            PREVIEW_ASSET_DIR.mkdir(parents=True, exist_ok=True)
-            if media_names:
-                logo_path = PREVIEW_ASSET_DIR / Path(media_names[0]).name
-                logo_path.write_bytes(archive.read(media_names[0]))
-                logo_uri = logo_path.name
-            if len(media_names) > 1:
-                qr_path = PREVIEW_ASSET_DIR / Path(media_names[1]).name
-                qr_path.write_bytes(archive.read(media_names[1]))
-                qr_uri = qr_path.name
+            pass
+            # media_names = sorted(
+            #     name
+            #     for name in archive.namelist()
+            #     if name.startswith("word/media/") and not name.endswith("/")
+            # )
+            # PREVIEW_ASSET_DIR.mkdir(parents=True, exist_ok=True)
+            # if media_names:
+            #     logo_path = PREVIEW_ASSET_DIR / Path(media_names[0]).name
+            #     logo_path.write_bytes(archive.read(media_names[0]))
+            #     logo_uri = logo_path.name
+            # if len(media_names) > 1:
+            #     qr_path = PREVIEW_ASSET_DIR / Path(media_names[1]).name
+            #     qr_path.write_bytes(archive.read(media_names[1]))
+            #     qr_uri = qr_path.name
 
             from xml.etree import ElementTree as ET
 
