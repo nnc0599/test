@@ -2,3 +2,5 @@ __pycache__/
 *.py[cod]
 data/*.db
 .tmp/
+# Accidental shell-redirect files (e.g. pip install PySide6>=X.Y without quoting)
+=*
