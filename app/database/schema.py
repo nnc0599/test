@@ -35,6 +35,22 @@ CREATE TABLE IF NOT EXISTS invoices (
     total_amount INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS quotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT,
+    tax_code TEXT,
+    address TEXT,
+    goods_amount INTEGER NOT NULL DEFAULT 0,
+    ship_fee INTEGER NOT NULL DEFAULT 0,
+    total_amount INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    export_path TEXT,
+    exported_invoice_no TEXT
+);
+
 CREATE TABLE IF NOT EXISTS invoice_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     invoice_no TEXT NOT NULL,
@@ -45,6 +61,18 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     unit_price INTEGER NOT NULL,
     line_total INTEGER NOT NULL,
     FOREIGN KEY (invoice_no) REFERENCES invoices(invoice_no) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS quotation_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quotation_id INTEGER NOT NULL,
+    product_code TEXT NOT NULL,
+    product_name TEXT NOT NULL,
+    unit TEXT,
+    quantity INTEGER NOT NULL,
+    unit_price INTEGER NOT NULL,
+    line_total INTEGER NOT NULL,
+    FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS payments (
@@ -104,9 +132,34 @@ REQUIRED_TABLE_COLUMNS = {
         "address": "TEXT",
         "total_amount": "INTEGER NOT NULL",
     },
+    "quotations": {
+        "id": "INTEGER",
+        "created_at": "TEXT NOT NULL",
+        "customer_name": "TEXT NOT NULL",
+        "phone": "TEXT",
+        "email": "TEXT",
+        "tax_code": "TEXT",
+        "address": "TEXT",
+        "goods_amount": "INTEGER NOT NULL DEFAULT 0",
+        "ship_fee": "INTEGER NOT NULL DEFAULT 0",
+        "total_amount": "INTEGER NOT NULL DEFAULT 0",
+        "status": "TEXT NOT NULL DEFAULT 'pending'",
+        "export_path": "TEXT",
+        "exported_invoice_no": "TEXT",
+    },
     "invoice_items": {
         "id": "INTEGER",
         "invoice_no": "TEXT NOT NULL",
+        "product_code": "TEXT NOT NULL",
+        "product_name": "TEXT NOT NULL",
+        "unit": "TEXT",
+        "quantity": "INTEGER NOT NULL",
+        "unit_price": "INTEGER NOT NULL",
+        "line_total": "INTEGER NOT NULL",
+    },
+    "quotation_items": {
+        "id": "INTEGER",
+        "quotation_id": "INTEGER NOT NULL",
         "product_code": "TEXT NOT NULL",
         "product_name": "TEXT NOT NULL",
         "unit": "TEXT",

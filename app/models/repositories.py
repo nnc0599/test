@@ -259,35 +259,127 @@ class InvoiceRepository:
 
         return f"{max_number + 1:06d}"
 
-    def create_invoice(self, payload: dict, lines: list[dict]) -> None:
-        with get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO invoices (
-                    invoice_no, created_at, customer_name, phone, email, tax_code, address, total_amount
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+    def _insert_invoice_records(self, conn, payload: dict, lines: list[dict]) -> None:
+        conn.execute(
+            """
+            INSERT INTO invoices (
+                invoice_no, created_at, customer_name, phone, email, tax_code, address, total_amount
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload["invoice_no"],
+                payload["created_at"],
+                payload["customer_name"],
+                payload.get("phone", ""),
+                payload.get("email", ""),
+                payload.get("tax_code", ""),
+                payload.get("address", ""),
+                int(payload["total_amount"]),
+            ),
+        )
+
+        conn.executemany(
+            """
+            INSERT INTO invoice_items (
+                invoice_no, product_code, product_name, unit, quantity, unit_price, line_total
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
                 (
                     payload["invoice_no"],
+                    line["product_code"],
+                    line["product_name"],
+                    line.get("unit", ""),
+                    int(line["quantity"]),
+                    int(line["unit_price"]),
+                    int(line["line_total"]),
+                )
+                for line in lines
+            ],
+        )
+
+        for line in lines:
+            cursor = conn.execute(
+                """
+                UPDATE products
+                SET quantity = quantity - ?
+                WHERE product_code = ? AND quantity >= ?
+                """,
+                (line["quantity"], line["product_code"], line["quantity"]),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"Sản phẩm {line['product_code']} không đủ số lượng để xuất kho."
+                )
+
+        paid_amount = int(payload.get("paid_amount", 0))
+        total = int(payload["total_amount"])
+        conn.execute(
+            """
+            INSERT INTO payments (
+                invoice_no, customer_name, purchase_date, payment_date, total_amount, paid_amount, remaining_amount
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload["invoice_no"],
+                payload["customer_name"],
+                payload["created_at"],
+                payload.get("payment_date", payload["created_at"]),
+                total,
+                paid_amount,
+                total - paid_amount,
+            ),
+        )
+
+    def create_invoice(self, payload: dict, lines: list[dict]) -> None:
+        with get_connection() as conn:
+            self._insert_invoice_records(conn, payload, lines)
+
+    def create_quotation(self, payload: dict, lines: list[dict]) -> int:
+        with get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO quotations (
+                    created_at,
+                    customer_name,
+                    phone,
+                    email,
+                    tax_code,
+                    address,
+                    goods_amount,
+                    ship_fee,
+                    total_amount,
+                    status,
+                    export_path,
+                    exported_invoice_no
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
                     payload["created_at"],
                     payload["customer_name"],
                     payload.get("phone", ""),
                     payload.get("email", ""),
                     payload.get("tax_code", ""),
                     payload.get("address", ""),
+                    int(payload.get("goods_amount", 0)),
+                    int(payload.get("ship_fee", 0)),
                     int(payload["total_amount"]),
+                    payload.get("status", "pending"),
+                    payload.get("export_path", ""),
+                    payload.get("exported_invoice_no", ""),
                 ),
             )
+            quotation_id = int(cursor.lastrowid)
 
             conn.executemany(
                 """
-                INSERT INTO invoice_items (
-                    invoice_no, product_code, product_name, unit, quantity, unit_price, line_total
+                INSERT INTO quotation_items (
+                    quotation_id, product_code, product_name, unit, quantity, unit_price, line_total
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
-                        payload["invoice_no"],
+                        quotation_id,
                         line["product_code"],
                         line["product_name"],
                         line.get("unit", ""),
@@ -298,38 +390,142 @@ class InvoiceRepository:
                     for line in lines
                 ],
             )
+            return quotation_id
 
-            for line in lines:
-                cursor = conn.execute(
-                    """
-                    UPDATE products
-                    SET quantity = quantity - ?
-                    WHERE product_code = ? AND quantity >= ?
-                    """,
-                    (line["quantity"], line["product_code"], line["quantity"]),
-                )
-                if cursor.rowcount == 0:
-                    raise ValueError(
-                        f"Sản phẩm {line['product_code']} không đủ số lượng để xuất kho."
-                    )
+    def update_quotation_export_path(self, quotation_id: int, export_path: str) -> None:
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE quotations SET export_path = ? WHERE id = ?",
+                (export_path, quotation_id),
+            )
 
-            paid_amount = int(payload.get("paid_amount", 0))
-            total = int(payload["total_amount"])
+    def list_recent_quotations(self, limit: int = 50) -> list[dict]:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, customer_name, phone, goods_amount, total_amount, created_at
+                FROM quotations
+                WHERE status = 'pending'
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (int(limit),),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_quotation_detail(self, quotation_id: int) -> dict | None:
+        with get_connection() as conn:
+            quotation = conn.execute(
+                """
+                SELECT
+                    id,
+                    created_at,
+                    customer_name,
+                    phone,
+                    email,
+                    tax_code,
+                    address,
+                    goods_amount,
+                    ship_fee,
+                    total_amount,
+                    status,
+                    export_path,
+                    exported_invoice_no
+                FROM quotations
+                WHERE id = ?
+                """,
+                (quotation_id,),
+            ).fetchone()
+            if not quotation:
+                return None
+
+            items = conn.execute(
+                """
+                SELECT
+                    product_code,
+                    product_name,
+                    unit,
+                    quantity,
+                    unit_price,
+                    line_total
+                FROM quotation_items
+                WHERE quotation_id = ?
+                ORDER BY id ASC
+                """,
+                (quotation_id,),
+            ).fetchall()
+            return {
+                "quotation": dict(quotation),
+                "items": [dict(row) for row in items],
+            }
+
+    def delete_quotation(self, quotation_id: int) -> None:
+        with get_connection() as conn:
+            conn.execute("DELETE FROM quotations WHERE id = ?", (quotation_id,))
+
+    def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str) -> None:
+        with get_connection() as conn:
+            quotation = conn.execute(
+                """
+                SELECT
+                    id,
+                    created_at,
+                    customer_name,
+                    phone,
+                    email,
+                    tax_code,
+                    address,
+                    total_amount,
+                    status
+                FROM quotations
+                WHERE id = ?
+                """,
+                (quotation_id,),
+            ).fetchone()
+            if not quotation:
+                raise ValueError("Không tìm thấy bản báo giá")
+            if str(quotation["status"] or "") != "pending":
+                raise ValueError("Bản báo giá này không còn khả dụng để xuất hóa đơn")
+
+            items = conn.execute(
+                """
+                SELECT
+                    product_code,
+                    product_name,
+                    unit,
+                    quantity,
+                    unit_price,
+                    line_total
+                FROM quotation_items
+                WHERE quotation_id = ?
+                ORDER BY id ASC
+                """,
+                (quotation_id,),
+            ).fetchall()
+            item_rows = [dict(row) for row in items]
+            if not item_rows:
+                raise ValueError("Bản báo giá không có sản phẩm để xuất hóa đơn")
+
+            payload = {
+                "invoice_no": invoice_no,
+                "created_at": quotation["created_at"],
+                "customer_name": quotation["customer_name"],
+                "phone": quotation["phone"],
+                "email": quotation["email"],
+                "tax_code": quotation["tax_code"],
+                "address": quotation["address"],
+                "total_amount": int(quotation["total_amount"]),
+                "paid_amount": 0,
+                "payment_date": quotation["created_at"],
+            }
+            self._insert_invoice_records(conn, payload, item_rows)
             conn.execute(
                 """
-                INSERT INTO payments (
-                    invoice_no, customer_name, purchase_date, payment_date, total_amount, paid_amount, remaining_amount
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                UPDATE quotations
+                SET status = 'exported', exported_invoice_no = ?
+                WHERE id = ?
                 """,
-                (
-                    payload["invoice_no"],
-                    payload["customer_name"],
-                    payload["created_at"],
-                    payload.get("payment_date", payload["created_at"]),
-                    total,
-                    paid_amount,
-                    total - paid_amount,
-                ),
+                (invoice_no, quotation_id),
             )
 
     def list_invoices(self) -> list[dict]:

@@ -39,13 +39,14 @@ from app.controllers.product_controller import ProductController
 from app.controllers.report_controller import ReportController
 from app.utils.invoice_docx import EXPORT_DIR
 from app.utils.time_utils import now_iso_utc7
-from app.utils.invoice_docx import export_invoice_docx, export_report_docx
+from app.utils.invoice_docx import build_quotation_output_name, export_invoice_docx, export_report_docx
 from app.views.dialogs.auth_dialog import PasswordDialog
 from app.views.dialogs.description_dialog import DescriptionDialog
 from app.views.dialogs.invoice_detail_dialog import InvoiceDetailDialog
 from app.views.dialogs.invoice_preview_dialog import InvoicePreviewDialog
 from app.views.dialogs.product_history_dialog import ProductHistoryDialog
 from app.views.dialogs.product_dialog import ProductFormDialog
+from app.views.dialogs.recent_quotations_dialog import RecentQuotationsDialog
 
 
 def format_money(value: int) -> str:
@@ -335,7 +336,7 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(payment_box)
 
-        export_location_box = QGroupBox("Nơi lưu file hóa đơn")
+        export_location_box = QGroupBox("Nơi lưu file hóa đơn / báo giá")
         export_location_layout = QHBoxLayout(export_location_box)
         self.export_dir_label = QLabel(str(self.invoice_export_dir))
         self.export_dir_label.setWordWrap(True)
@@ -345,15 +346,41 @@ class MainWindow(QMainWindow):
         export_location_layout.addWidget(self.choose_export_dir_btn)
         layout.addWidget(export_location_box)
 
-        self.export_btn = QPushButton("XUẤT HÓA ĐƠN")
-        self.export_btn.setMinimumHeight(48)
+        action_row = QHBoxLayout()
+        action_row.setSpacing(10)
+
+        self.save_quote_btn = QPushButton("Lưu bản báo giá")
+        self.view_quote_btn = QPushButton("Xem bản báo giá")
+        self.export_btn = QPushButton("Xuất hóa đơn")
+
+        self.save_quote_btn.setMinimumHeight(50)
+        self.view_quote_btn.setMinimumHeight(50)
+        self.export_btn.setMinimumHeight(50)
+
+        self.save_quote_btn.setStyleSheet(
+            "QPushButton { background: #F59E0B; color: white; font-weight: 900; }"
+            "QPushButton:hover { background: #D97706; }"
+            "QPushButton:pressed { background: #B45309; }"
+        )
+        self.view_quote_btn.setStyleSheet(
+            "QPushButton { background: #7C3AED; color: white; font-weight: 900; }"
+            "QPushButton:hover { background: #6D28D9; }"
+            "QPushButton:pressed { background: #5B21B6; }"
+        )
         self.export_btn.setStyleSheet(
-            "QPushButton { background: #0EA5E9; color: white; font-weight: 800; }"
+            "QPushButton { background: #0EA5E9; color: white; font-weight: 900; }"
             "QPushButton:hover { background: #0284C7; }"
             "QPushButton:pressed { background: #0369A1; }"
         )
+
+        self.save_quote_btn.clicked.connect(self._save_quotation)
+        self.view_quote_btn.clicked.connect(self._open_recent_quotations)
         self.export_btn.clicked.connect(self._export_invoice)
-        layout.addWidget(self.export_btn)
+
+        action_row.addWidget(self.save_quote_btn)
+        action_row.addWidget(self.view_quote_btn)
+        action_row.addWidget(self.export_btn)
+        layout.addLayout(action_row)
 
         self.search_product_edit.textChanged.connect(self._refresh_product_suggestions)
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
@@ -1193,80 +1220,273 @@ class MainWindow(QMainWindow):
         self.total_goods_label.setText(format_money(total_goods))
         self.total_all_label.setText(format_money(total_all))
 
-    def _export_invoice(self) -> None:
+    def _build_order_customer_data(self) -> dict:
+        return {
+            "full_name": self.order_name.text().strip(),
+            "phone": self.order_phone.text().strip(),
+            "address": self.order_address.text().strip(),
+            "email": self.order_email.text().strip(),
+            "tax_code": self.order_tax_code.text().strip(),
+            "note": "Tự động cập nhật từ lên đơn",
+        }
+
+    def _build_order_document_data(self, invoice_no: str = "") -> tuple[dict, dict, list[dict]]:
+        if not self.invoice_lines:
+            raise ValueError("Đơn hàng phải có ít nhất 1 sản phẩm")
+
+        customer_data = self._build_order_customer_data()
+        if not customer_data["full_name"]:
+            raise ValueError("Họ tên khách hàng không được để trống")
+
+        created_at = self.order_created_at.text().strip() or now_iso_utc7()
+        total_goods, ship_fee, total_all = self._calculate_invoice_totals()
+        export_lines = [dict(line) for line in self.invoice_lines]
+        document_data = {
+            "invoice_no": invoice_no,
+            "created_at": created_at,
+            "customer_name": customer_data["full_name"],
+            "phone": customer_data["phone"],
+            "email": customer_data["email"],
+            "tax_code": customer_data["tax_code"],
+            "address": customer_data["address"],
+            "goods_amount": total_goods,
+            "ship_fee": ship_fee,
+            "total_amount": total_all,
+        }
+        return customer_data, document_data, export_lines
+
+    def _show_document_preview(
+        self,
+        document_data: dict,
+        items: list[dict],
+        document_kind: str,
+        *,
+        show_confirm: bool = True,
+        confirm_text: str | None = None,
+        window_title: str | None = None,
+        hint_text: str | None = None,
+    ) -> bool:
+        preview_dialog = InvoicePreviewDialog(
+            document_data,
+            items,
+            self,
+            document_kind=document_kind,
+            show_confirm=show_confirm,
+            confirm_text=confirm_text,
+            window_title=window_title,
+            hint_text=hint_text,
+        )
+        preview_dialog.exec()
+        return preview_dialog.confirmed
+
+    def _reset_order_form(self) -> None:
+        self.invoice_lines.clear()
+        self._render_invoice_lines()
+        self._update_invoice_totals()
+        self.order_name.clear()
+        self.order_phone.clear()
+        self.order_address.clear()
+        self.order_email.clear()
+        self.order_tax_code.clear()
+        self.search_product_edit.clear()
+        self.search_product_list.clear()
+        self.search_product_list.hide()
+        self.customer_suggestion_list.clear()
+        self.customer_suggestion_list.hide()
+        self.selected_product_code = None
+        self._selected_product_stock = 0
+        self.ship_fee_spin.setValue(0)
+        self.order_price_spin.setValue(0)
+        self.order_qty_spin.setValue(1)
+
+    def _remove_exported_file(self, export_path: Path) -> None:
         try:
-            created_at = self.order_created_at.text().strip() or now_iso_utc7()
-            invoice_no = self.order_controller.generate_invoice_no()
-            total_goods, ship_fee, total_all = self._calculate_invoice_totals()
-            export_lines = [dict(line) for line in self.invoice_lines]
+            if export_path.exists():
+                export_path.unlink()
+        except OSError:
+            pass
 
-            customer_data = {
-                "full_name": self.order_name.text().strip(),
-                "phone": self.order_phone.text().strip(),
-                "address": self.order_address.text().strip(),
-                "email": self.order_email.text().strip(),
-                "tax_code": self.order_tax_code.text().strip(),
-                "note": "Tự động cập nhật từ lên đơn",
-            }
-            invoice_data = {
-                "invoice_no": invoice_no,
-                "created_at": created_at,
-                "goods_amount": total_goods,
-                "ship_fee": ship_fee,
-                "total_amount": total_all,
-                "paid_amount": 0,
-                "payment_date": created_at,
-            }
-
-            preview_invoice = {
-                "invoice_no": invoice_no,
-                "created_at": created_at,
-                "customer_name": customer_data["full_name"],
-                "phone": customer_data["phone"],
-                "email": customer_data["email"],
-                "tax_code": customer_data["tax_code"],
-                "address": customer_data["address"],
-                "goods_amount": total_goods,
-                "ship_fee": ship_fee,
-                "total_amount": total_all,
-            }
-
-            preview_dialog = InvoicePreviewDialog(preview_invoice, export_lines, self)
-            preview_dialog.exec()
-            if not preview_dialog.confirmed:
+    def _save_quotation(self) -> None:
+        quotation_id: int | None = None
+        try:
+            customer_data, quotation_data, export_lines = self._build_order_document_data()
+            confirmed = self._show_document_preview(
+                quotation_data,
+                export_lines,
+                "quotation",
+                confirm_text="Lưu bản báo giá",
+            )
+            if not confirmed:
                 return
 
-            self.order_controller.create_invoice(customer_data, invoice_data, self.invoice_lines)
-
+            quotation_id = self.order_controller.create_quotation(customer_data, quotation_data, export_lines)
+            output_name = build_quotation_output_name(customer_data["full_name"], quotation_data["created_at"])
             export_path = export_invoice_docx(
-                preview_invoice,
+                quotation_data,
                 export_lines,
                 self.invoice_export_dir,
+                document_kind="quotation",
+                output_name=output_name,
             )
+            self.order_controller.update_quotation_export_path(quotation_id, str(export_path))
+
+            QMessageBox.information(
+                self,
+                "Thành công",
+                f"Đã lưu bản báo giá\nFile Word: {export_path}",
+            )
+            self._reset_order_form()
+            self.refresh_products()
+            self.refresh_report()
+        except Exception as exc:  # pragma: no cover - dialog feedback
+            if quotation_id is not None:
+                try:
+                    self.order_controller.cancel_quotation(quotation_id)
+                except Exception:
+                    pass
+            QMessageBox.critical(self, "Lỗi", str(exc))
+
+    def _open_recent_quotations(self) -> None:
+        dialog = RecentQuotationsDialog(
+            load_rows=lambda: self.order_controller.list_recent_quotations(100),
+            on_view=self._view_quotation_preview,
+            on_export=self._export_quotation_from_dialog,
+            on_cancel=self._cancel_quotation_from_dialog,
+            parent=self,
+        )
+        dialog.exec()
+
+    def _view_quotation_preview(self, quotation_id: int) -> None:
+        detail = self.order_controller.get_quotation_detail(quotation_id)
+        if not detail:
+            QMessageBox.warning(self, "Không tìm thấy", "Không lấy được chi tiết bản báo giá")
+            return
+
+        quotation = detail["quotation"]
+        preview_data = {
+            "invoice_no": "",
+            "created_at": quotation["created_at"],
+            "customer_name": quotation["customer_name"],
+            "phone": quotation.get("phone", ""),
+            "email": quotation.get("email", ""),
+            "tax_code": quotation.get("tax_code", ""),
+            "address": quotation.get("address", ""),
+            "goods_amount": int(quotation.get("goods_amount", 0)),
+            "ship_fee": int(quotation.get("ship_fee", 0)),
+            "total_amount": int(quotation.get("total_amount", 0)),
+        }
+        preview_dialog = InvoicePreviewDialog(
+            preview_data,
+            detail["items"],
+            self,
+            document_kind="quotation",
+            show_confirm=False,
+            window_title="Xem bản báo giá A4",
+            hint_text="Hiển thị toàn bộ nội dung bản báo giá trên khổ giấy A4",
+        )
+        preview_dialog.exec()
+
+    def _export_quotation_from_dialog(self, quotation_id: int) -> bool:
+        detail = self.order_controller.get_quotation_detail(quotation_id)
+        if not detail:
+            QMessageBox.warning(self, "Không tìm thấy", "Không lấy được chi tiết bản báo giá")
+            return False
+
+        quotation = detail["quotation"]
+        items = detail["items"]
+        invoice_no = self.order_controller.generate_invoice_no()
+        invoice_data = {
+            "invoice_no": invoice_no,
+            "created_at": quotation["created_at"],
+            "customer_name": quotation["customer_name"],
+            "phone": quotation.get("phone", ""),
+            "email": quotation.get("email", ""),
+            "tax_code": quotation.get("tax_code", ""),
+            "address": quotation.get("address", ""),
+            "goods_amount": int(quotation.get("goods_amount", 0)),
+            "ship_fee": int(quotation.get("ship_fee", 0)),
+            "total_amount": int(quotation.get("total_amount", 0)),
+        }
+
+        if not self._show_document_preview(
+            invoice_data,
+            items,
+            "invoice",
+            confirm_text="Xuất hóa đơn",
+        ):
+            return False
+
+        try:
+            export_path = export_invoice_docx(
+                invoice_data,
+                items,
+                self.invoice_export_dir,
+                document_kind="invoice",
+                output_name=f"{invoice_no}.docx",
+            )
+            try:
+                self.order_controller.export_quotation_to_invoice(quotation_id, invoice_no)
+            except Exception:
+                self._remove_exported_file(export_path)
+                raise
 
             QMessageBox.information(
                 self,
                 "Thành công",
                 f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}",
             )
-            self.invoice_lines.clear()
-            self._render_invoice_lines()
-            self._update_invoice_totals()
-            self.order_name.clear()
-            self.order_phone.clear()
-            self.order_address.clear()
-            self.order_email.clear()
-            self.order_tax_code.clear()
-            self.search_product_edit.clear()
-            self.search_product_list.clear()
-            self.search_product_list.hide()
-            self.customer_suggestion_list.clear()
-            self.customer_suggestion_list.hide()
-            self.selected_product_code = None
-            self._selected_product_stock = 0
-            self.ship_fee_spin.setValue(0)
-            self.order_price_spin.setValue(0)
-            self.order_qty_spin.setValue(1)
+            self.refresh_products()
+            self.refresh_report()
+            return True
+        except Exception as exc:  # pragma: no cover - dialog feedback
+            QMessageBox.critical(self, "Lỗi", str(exc))
+            return False
+
+    def _cancel_quotation_from_dialog(self, quotation_id: int) -> bool:
+        answer = QMessageBox.question(
+            self,
+            "Hủy đơn",
+            "Hủy toàn bộ bản báo giá này và xóa khỏi danh sách?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return False
+
+        try:
+            self.order_controller.cancel_quotation(quotation_id)
+            QMessageBox.information(self, "Đã hủy", "Bản báo giá đã được hủy hoàn toàn")
+            return True
+        except Exception as exc:  # pragma: no cover - dialog feedback
+            QMessageBox.critical(self, "Lỗi", str(exc))
+            return False
+
+    def _export_invoice(self) -> None:
+        try:
+            invoice_no = self.order_controller.generate_invoice_no()
+            customer_data, invoice_data, export_lines = self._build_order_document_data(invoice_no=invoice_no)
+            if not self._show_document_preview(invoice_data, export_lines, "invoice"):
+                return
+
+            export_path = export_invoice_docx(
+                invoice_data,
+                export_lines,
+                self.invoice_export_dir,
+                document_kind="invoice",
+                output_name=f"{invoice_no}.docx",
+            )
+            try:
+                self.order_controller.create_invoice(customer_data, invoice_data, export_lines)
+            except Exception:
+                self._remove_exported_file(export_path)
+                raise
+
+            QMessageBox.information(
+                self,
+                "Thành công",
+                f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}",
+            )
+            self._reset_order_form()
             self.refresh_products()
             self.refresh_report()
         except Exception as exc:  # pragma: no cover - dialog feedback
@@ -1516,7 +1736,7 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            preview_dialog = InvoicePreviewDialog(detail["invoice"], detail["items"], self)
+            preview_dialog = InvoicePreviewDialog(detail["invoice"], detail["items"], self, document_kind="invoice")
             preview_dialog.exec()
             if not preview_dialog.confirmed:
                 return
@@ -1525,6 +1745,8 @@ class MainWindow(QMainWindow):
                 detail["invoice"],
                 detail["items"],
                 self.invoice_export_dir,
+                document_kind="invoice",
+                output_name=f"{invoice_no}.docx",
             )
             QMessageBox.information(
                 self,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.utils.invoice_docx import DOCUMENT_VARIANTS
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
@@ -17,16 +19,28 @@ from app.utils.invoice_docx import PREVIEW_ASSET_DIR, build_invoice_preview_html
 
 
 class InvoicePreviewDialog(QDialog):
-    def __init__(self, invoice: dict, items: list[dict], parent=None):
+    def __init__(
+        self,
+        invoice: dict,
+        items: list[dict],
+        parent=None,
+        document_kind: str = "invoice",
+        show_confirm: bool = True,
+        confirm_text: str | None = None,
+        window_title: str | None = None,
+        hint_text: str | None = None,
+    ):
         super().__init__(parent)
-        self.setWindowTitle("Xem trước hóa đơn A4")
+        variant = DOCUMENT_VARIANTS.get(document_kind, DOCUMENT_VARIANTS["invoice"])
+        self.setWindowTitle(window_title or str(variant["window_title"]))
         self.setModal(True)
         self.resize(1100, 900)
 
         self._confirmed = False
+        self._show_confirm = show_confirm
 
         root = QVBoxLayout(self)
-        hint = QLabel("Xem trước bố cục in trên khổ giấy A4 trước khi xuất file Word")
+        hint = QLabel(hint_text or str(variant["hint"]))
         hint.setStyleSheet("color: #475569; font-style: italic;")
         root.addWidget(hint)
 
@@ -56,7 +70,7 @@ class InvoicePreviewDialog(QDialog):
         self.preview.setStyleSheet(
             "QTextBrowser { background: white; color: #111827; padding: 0; border: none; }"
         )
-        self.preview.setHtml(build_invoice_preview_html(invoice, items))
+        self.preview.setHtml(build_invoice_preview_html(invoice, items, document_kind=document_kind))
 
         frame_layout.addWidget(self.preview)
         page_layout.addWidget(page_frame)
@@ -70,17 +84,22 @@ class InvoicePreviewDialog(QDialog):
         self.close_btn.clicked.connect(self.reject)
         actions.addWidget(self.close_btn)
 
-        self.confirm_btn = QPushButton("Xuất file Word")
+        self.confirm_btn = QPushButton(confirm_text or str(variant["confirm_text"]))
         self.confirm_btn.setStyleSheet(
             "QPushButton { background: #0EA5E9; color: white; font-weight: 800; }"
             "QPushButton:hover { background: #0284C7; }"
         )
         self.confirm_btn.clicked.connect(self._accept_export)
-        actions.addWidget(self.confirm_btn)
+        if show_confirm:
+            actions.addWidget(self.confirm_btn)
+        else:
+            self.confirm_btn.hide()
 
         root.addLayout(actions)
 
     def _accept_export(self) -> None:
+        if not self._show_confirm:
+            return
         self._confirmed = True
         self.accept()
 

@@ -40,6 +40,12 @@ class OrderController:
     def get_invoice_detail(self, invoice_no: str) -> dict | None:
         return self.invoice_repo.get_invoice_detail(invoice_no)
 
+    def list_recent_quotations(self, limit: int = 50) -> list[dict]:
+        return self.invoice_repo.list_recent_quotations(limit)
+
+    def get_quotation_detail(self, quotation_id: int) -> dict | None:
+        return self.invoice_repo.get_quotation_detail(quotation_id)
+
     def generate_invoice_no(self) -> str:
         return self.invoice_repo.generate_invoice_no()
 
@@ -66,3 +72,47 @@ class OrderController:
             "payment_date": invoice_data.get("payment_date", created_at),
         }
         self.invoice_repo.create_invoice(payload, lines)
+
+    def create_quotation(self, customer_data: dict, quotation_data: dict, lines: list[dict]) -> int:
+        if not lines:
+            raise ValueError("Báo giá phải có ít nhất 1 hàng hóa")
+        if not customer_data.get("full_name", "").strip():
+            raise ValueError("Họ tên khách hàng không được để trống")
+
+        created_at = quotation_data.get("created_at") or now_iso_utc7()
+        payload = {
+            "created_at": created_at,
+            "customer_name": customer_data["full_name"],
+            "phone": customer_data.get("phone", ""),
+            "address": customer_data.get("address", ""),
+            "email": customer_data.get("email", ""),
+            "tax_code": customer_data.get("tax_code", ""),
+            "goods_amount": int(quotation_data.get("goods_amount", 0)),
+            "ship_fee": int(quotation_data.get("ship_fee", 0)),
+            "total_amount": int(quotation_data["total_amount"]),
+            "export_path": quotation_data.get("export_path", ""),
+        }
+        return self.invoice_repo.create_quotation(payload, lines)
+
+    def update_quotation_export_path(self, quotation_id: int, export_path: str) -> None:
+        self.invoice_repo.update_quotation_export_path(quotation_id, export_path)
+
+    def cancel_quotation(self, quotation_id: int) -> None:
+        self.invoice_repo.delete_quotation(quotation_id)
+
+    def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str) -> None:
+        detail = self.invoice_repo.get_quotation_detail(quotation_id)
+        if not detail:
+            raise ValueError("Không tìm thấy bản báo giá")
+
+        quotation = detail["quotation"]
+        customer_data = {
+            "full_name": quotation["customer_name"],
+            "phone": quotation.get("phone", ""),
+            "address": quotation.get("address", ""),
+            "email": quotation.get("email", ""),
+            "tax_code": quotation.get("tax_code", ""),
+            "note": "Tự động cập nhật khi xuất hóa đơn từ báo giá",
+        }
+        self.customer_repo.upsert_customer(customer_data)
+        self.invoice_repo.export_quotation_to_invoice(quotation_id, invoice_no)

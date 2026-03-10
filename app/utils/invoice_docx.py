@@ -25,6 +25,21 @@ EXPORT_DIR = ROOT_DIR / "data" / "exported_invoices"
 PREVIEW_ASSET_DIR = ROOT_DIR / "data" / ".preview_assets"
 SCREEN_IMAGE_PATH = ROOT_DIR / "Screen.png"
 
+DOCUMENT_VARIANTS = {
+    "invoice": {
+        "title": "PHIẾU XUẤT KHO KIÊM BẢO HÀNH",
+        "confirm_text": "Xuất file Word",
+        "window_title": "Xem trước hóa đơn A4",
+        "hint": "Xem trước bố cục in trên khổ giấy A4 trước khi xuất file Word",
+    },
+    "quotation": {
+        "title": "BÁO GIÁ VẬT TƯ",
+        "confirm_text": "Lưu bản báo giá",
+        "window_title": "Xem trước bản báo giá A4",
+        "hint": "Xem trước bản báo giá trên khổ giấy A4 trước khi lưu file Word",
+    },
+}
+
     
 def format_money(value: int) -> str:
     return f"{int(value):,}".replace(",", ".")
@@ -104,6 +119,32 @@ def _parse_created_at(created_at: str) -> datetime:
         except ValueError:
             continue
     raise ValueError(f"Không đọc được ngày tạo hóa đơn: {created_at}")
+
+
+def _document_variant(document_kind: str) -> dict:
+    normalized_kind = document_kind.strip().lower()
+    if normalized_kind not in DOCUMENT_VARIANTS:
+        raise ValueError(f"Loại chứng từ không hợp lệ: {document_kind}")
+    return DOCUMENT_VARIANTS[normalized_kind]
+
+
+def _sanitize_file_stem(value: str) -> str:
+    normalized = " ".join(str(value).strip().split())
+    safe_chars = []
+    for char in normalized:
+        if char in '<>:"/\\|?*':
+            safe_chars.append("-")
+        else:
+            safe_chars.append(char)
+    safe_value = "".join(safe_chars).strip(" .")
+    return safe_value or "Bao gia"
+
+
+def build_quotation_output_name(customer_name: str, created_at: str) -> str:
+    created_time = _parse_created_at(created_at)
+    safe_name = _sanitize_file_stem(customer_name or "Khach hang")
+    timestamp = created_time.strftime("%Y%m%d_%H%M%S")
+    return f"{safe_name} Bao gia {timestamp}.docx"
 
 
 def _set_paragraph_text(paragraph, text: str, alignment=None, bold: bool | None = None, italic: bool | None = None) -> None:
@@ -652,8 +693,9 @@ def _load_template_preview_assets() -> dict:
     }
 
 
-def build_invoice_preview_html(invoice: dict, items: list[dict]) -> str:
+def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: str = "invoice") -> str:
     created_at = _parse_created_at(str(invoice.get("created_at", "")))
+    variant = _document_variant(document_kind)
     assets = _load_template_preview_assets()
     page_margin_mm = assets["page_margin_mm"]
     item_widths = assets["item_widths"]
@@ -907,7 +949,13 @@ def build_invoice_preview_html(invoice: dict, items: list[dict]) -> str:
         """
 
 
-def export_invoice_docx(invoice: dict, items: list[dict], output_dir: Path | None = None) -> Path:
+def export_invoice_docx(
+    invoice: dict,
+    items: list[dict],
+    output_dir: Path | None = None,
+    document_kind: str = "invoice",
+    output_name: str | None = None,
+) -> Path:
     if not TEMPLATE_PATH.exists():
         raise FileNotFoundError(f"Không tìm thấy mẫu hóa đơn: {TEMPLATE_PATH}")
     if not items:
@@ -916,17 +964,26 @@ def export_invoice_docx(invoice: dict, items: list[dict], output_dir: Path | Non
     doc = Document(str(TEMPLATE_PATH))
     created_at = _parse_created_at(str(invoice.get("created_at", "")))
     invoice_no = str(invoice.get("invoice_no", "")).strip()
+    variant = _document_variant(document_kind)
 
     if len(doc.paragraphs) < 7 or len(doc.tables) < 2:
         raise ValueError("Mẫu template.docx không đúng cấu trúc mong đợi")
 
     items_table = doc.tables[1]
 
+    title_paragraph = doc.paragraphs[0]
     date_paragraph = doc.paragraphs[1]
     invoice_paragraph = doc.paragraphs[2]
     email_paragraph = doc.paragraphs[3]
     address_paragraph = doc.paragraphs[4]
     money_words_paragraph = doc.paragraphs[6]
+
+    _set_paragraph_text(
+        title_paragraph,
+        str(variant["title"]),
+        alignment=WD_ALIGN_PARAGRAPH.CENTER,
+        bold=True,
+    )
 
     _set_paragraph_text(
         date_paragraph,
@@ -972,6 +1029,9 @@ def export_invoice_docx(invoice: dict, items: list[dict], output_dir: Path | Non
 
     save_dir = output_dir or EXPORT_DIR
     save_dir.mkdir(parents=True, exist_ok=True)
-    output_path = save_dir / f"{invoice_no}.docx"
+    resolved_output_name = (output_name or f"{invoice_no}.docx").strip()
+    if not resolved_output_name.lower().endswith(".docx"):
+        resolved_output_name = f"{resolved_output_name}.docx"
+    output_path = save_dir / resolved_output_name
     doc.save(str(output_path))
     return output_path
