@@ -553,9 +553,9 @@ def _build_customer_info_table(doc: Document, invoice: dict):
     )
 
     address_cell = table.cell(2, 0).merge(table.cell(2, 1))
-    _set_cell_text(
+    _set_cell_segments(
         address_cell,
-        f"Địa chỉ: {invoice.get('address', '').strip()}",
+        [("Địa chỉ: ", True, None), (invoice.get('address', '').strip(), None, None)],
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
     return table
