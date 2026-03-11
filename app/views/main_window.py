@@ -252,6 +252,7 @@ class MainWindow(QMainWindow):
         self.search_product_list = QListWidget()
         self.search_product_list.setAlternatingRowColors(True)
         self.search_product_list.setMaximumHeight(140)
+        self.search_product_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.search_product_list.hide()
 
         self.order_qty_spin = QSpinBox()
@@ -269,7 +270,7 @@ class MainWindow(QMainWindow):
         add_grid.addWidget(QLabel("Đơn giá"), 0, 6)
         add_grid.addWidget(self.order_price_spin, 0, 7)
         add_grid.addWidget(self.add_line_btn, 0, 8)
-        add_grid.addWidget(self.search_product_list, 1, 1, 1, 3)
+        add_grid.addWidget(self.search_product_list, 1, 0, 1, 9)
 
         layout.addWidget(add_item_box)
 
