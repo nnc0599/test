@@ -54,6 +54,7 @@ def format_money(value: int) -> str:
 
 
 LIST_ROW_HEIGHT_PX = 35
+PRODUCT_LIST_ROW_HEIGHT_PX = 50
 
 
 class MainWindow(QMainWindow):
@@ -197,6 +198,10 @@ class MainWindow(QMainWindow):
             widget.setTextElideMode(Qt.ElideNone)
             widget.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
             widget.verticalHeader().setMinimumSectionSize(LIST_ROW_HEIGHT_PX)
+
+        if getattr(self, "product_table", None) is not None:
+            self.product_table.verticalHeader().setDefaultSectionSize(PRODUCT_LIST_ROW_HEIGHT_PX)
+            self.product_table.verticalHeader().setMinimumSectionSize(PRODUCT_LIST_ROW_HEIGHT_PX)
 
     def _build_order_page(self) -> QWidget:
         page = QWidget()
