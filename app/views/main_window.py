@@ -1183,6 +1183,7 @@ class MainWindow(QMainWindow):
         self.invoice_lines.append(line)
         self._render_invoice_lines()
         self._update_invoice_totals()
+        self._reset_add_item_inputs()
 
     def _render_invoice_lines(self) -> None:
         self.order_table.setRowCount(len(self.invoice_lines))
@@ -1284,6 +1285,17 @@ class MainWindow(QMainWindow):
         preview_dialog.exec()
         return preview_dialog.confirmed
 
+    def _reset_add_item_inputs(self) -> None:
+        self.search_product_edit.clear()
+        self.search_product_list.clear()
+        self.search_product_list.hide()
+        self.selected_product_code = None
+        self._selected_product_stock = 0
+        self.order_qty_spin.setMaximum(1_000_000_000)
+        self.order_qty_spin.setValue(1)
+        self.order_price_spin.setValue(0)
+        self.search_product_edit.setFocus()
+
     def _reset_order_form(self) -> None:
         self.invoice_lines.clear()
         self._render_invoice_lines()
@@ -1293,16 +1305,10 @@ class MainWindow(QMainWindow):
         self.order_address.clear()
         self.order_email.clear()
         self.order_tax_code.clear()
-        self.search_product_edit.clear()
-        self.search_product_list.clear()
-        self.search_product_list.hide()
         self.customer_suggestion_list.clear()
         self.customer_suggestion_list.hide()
-        self.selected_product_code = None
-        self._selected_product_stock = 0
         self.ship_fee_spin.setValue(0)
-        self.order_price_spin.setValue(0)
-        self.order_qty_spin.setValue(1)
+        self._reset_add_item_inputs()
 
     def _remove_exported_file(self, export_path: Path) -> None:
         try:
