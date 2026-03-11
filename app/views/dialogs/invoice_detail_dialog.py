@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -48,7 +49,9 @@ class InvoiceDetailDialog(QDialog):
             ["Mã sản phẩm", "Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền"]
         )
         self.items_table.verticalHeader().setVisible(False)
-        self.items_table.verticalHeader().setDefaultSectionSize(LIST_ROW_HEIGHT_PX)
+        self.items_table.setWordWrap(True)
+        self.items_table.setTextElideMode(Qt.ElideNone)
+        self.items_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.items_table.verticalHeader().setMinimumSectionSize(LIST_ROW_HEIGHT_PX)
         self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
         header = self.items_table.horizontalHeader()
@@ -68,6 +71,7 @@ class InvoiceDetailDialog(QDialog):
             ]
             for col, value in enumerate(values):
                 self.items_table.setItem(row, col, QTableWidgetItem(value))
+        self.items_table.resizeRowsToContents()
 
         items_layout.addWidget(self.items_table)
 

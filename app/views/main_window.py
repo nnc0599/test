@@ -39,7 +39,7 @@ from app.controllers.product_controller import ProductController
 from app.controllers.report_controller import ReportController
 from app.utils.invoice_docx import EXPORT_DIR
 from app.utils.time_utils import now_iso_utc7
-from app.utils.invoice_docx import build_quotation_output_name, export_invoice_docx, export_report_docx
+from app.utils.invoice_docx import build_invoice_output_name, build_quotation_output_name, export_invoice_docx, export_report_docx
 from app.views.dialogs.auth_dialog import PasswordDialog
 from app.views.dialogs.description_dialog import DescriptionDialog
 from app.views.dialogs.invoice_detail_dialog import InvoiceDetailDialog
@@ -193,7 +193,9 @@ class MainWindow(QMainWindow):
                 widget.setStyleSheet(f"{existing_style}\n{item_style}".strip())
 
         for widget in self.findChildren(QTableWidget):
-            widget.verticalHeader().setDefaultSectionSize(LIST_ROW_HEIGHT_PX)
+            widget.setWordWrap(True)
+            widget.setTextElideMode(Qt.ElideNone)
+            widget.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
             widget.verticalHeader().setMinimumSectionSize(LIST_ROW_HEIGHT_PX)
 
     def _build_order_page(self) -> QWidget:
@@ -865,6 +867,7 @@ class MainWindow(QMainWindow):
                 lambda checked=False, invoice_no=invoice["invoice_no"]: self._open_invoice_preview(invoice_no)
             )
             self.invoice_table.setCellWidget(row, 5, view_btn)
+        self.invoice_table.resizeRowsToContents()
 
     def _open_invoice_preview(self, invoice_no: str) -> None:
         detail = self.order_controller.get_invoice_detail(invoice_no)
@@ -882,6 +885,7 @@ class MainWindow(QMainWindow):
                 detail["invoice"],
                 detail["items"],
                 self.invoice_export_dir,
+                output_name=build_invoice_output_name(invoice_no, detail["invoice"].get("customer_name", "")),
             )
             QMessageBox.information(
                 self,
@@ -1201,6 +1205,7 @@ class MainWindow(QMainWindow):
             )
             delete_btn.clicked.connect(lambda checked=False, row=idx - 1: self._remove_invoice_line(row))
             self.order_table.setCellWidget(idx - 1, 6, delete_btn)
+        self.order_table.resizeRowsToContents()
 
     def _remove_invoice_line(self, row: int) -> None:
         if row < 0 or row >= len(self.invoice_lines):
@@ -1422,7 +1427,7 @@ class MainWindow(QMainWindow):
                 items,
                 self.invoice_export_dir,
                 document_kind="invoice",
-                output_name=f"{invoice_no}.docx",
+                output_name=build_invoice_output_name(invoice_no, quotation.get("customer_name", "")),
             )
             try:
                 self.order_controller.export_quotation_to_invoice(quotation_id, invoice_no)
@@ -1473,7 +1478,7 @@ class MainWindow(QMainWindow):
                 export_lines,
                 self.invoice_export_dir,
                 document_kind="invoice",
-                output_name=f"{invoice_no}.docx",
+                output_name=build_invoice_output_name(invoice_no, customer_data.get("full_name", "")),
             )
             try:
                 self.order_controller.create_invoice(customer_data, invoice_data, export_lines)
@@ -1515,6 +1520,7 @@ class MainWindow(QMainWindow):
                     self.product_table.setCellWidget(row, col, btn)
                 else:
                     self.product_table.setItem(row, col, QTableWidgetItem(value))
+        self.product_table.resizeRowsToContents()
 
     def _show_product_desc_direct(self, product: dict) -> None:
         dlg = DescriptionDialog(
@@ -1746,7 +1752,7 @@ class MainWindow(QMainWindow):
                 detail["items"],
                 self.invoice_export_dir,
                 document_kind="invoice",
-                output_name=f"{invoice_no}.docx",
+                output_name=build_invoice_output_name(invoice_no, detail["invoice"].get("customer_name", "")),
             )
             QMessageBox.information(
                 self,

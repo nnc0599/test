@@ -147,6 +147,12 @@ def build_quotation_output_name(customer_name: str, created_at: str) -> str:
     return f"{safe_name} Bao gia {timestamp}.docx"
 
 
+def build_invoice_output_name(invoice_no: str, customer_name: str) -> str:
+    safe_invoice_no = _sanitize_file_stem(invoice_no or "Hoa don")
+    safe_customer_name = _sanitize_file_stem(customer_name or "Khach hang")
+    return f"{safe_invoice_no} - {safe_customer_name}.docx"
+
+
 def _set_paragraph_text(paragraph, text: str, alignment=None, bold: bool | None = None, italic: bool | None = None) -> None:
     paragraph.text = text
     if alignment is not None:
@@ -231,7 +237,12 @@ def _set_table_row_height(table, height_cm: float) -> None:
     row_height = Cm(height_cm)
     for row in table.rows:
         row.height = row_height
-        row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+        row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
+
+
+def _set_row_min_height(row, height_cm: float) -> None:
+    row.height = Cm(height_cm)
+    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
 
 
 def _remove_paragraph(paragraph) -> None:
@@ -419,8 +430,7 @@ def _add_report_data_table(
 
     if not data_rows:
         row = table.add_row()
-        row.height = Cm(0.7)
-        row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+        _set_row_min_height(row, 0.7)
         empty_cell = row.cells[0]
         if len(headers) > 1:
             empty_cell = row.cells[0].merge(row.cells[len(headers) - 1])
@@ -435,8 +445,7 @@ def _add_report_data_table(
 
     for values in data_rows:
         row = table.add_row()
-        row.height = Cm(0.7)
-        row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+        _set_row_min_height(row, 0.7)
         _apply_column_widths(row, column_widths_cm)
         for col_index, value in enumerate(values):
             _set_cell_text(
@@ -772,6 +781,9 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                     .meta-table td, .info-table td, .signatures td {{
                         border: none;
                         padding: 0;
+                        white-space: normal;
+                        overflow-wrap: anywhere;
+                        word-break: break-word;
                     }}
                     .meta-left {{
                         text-align: center;
@@ -808,6 +820,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                     }}
                     .items-table {{
                         margin-top: 0.8mm;
+                        table-layout: fixed;
                     }}
                     .items-table th, .items-table td {{
                         border: 1px solid #111827;
@@ -815,6 +828,10 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                         text-align: left;
                         vertical-align: middle;
                         font-size: 12pt;
+                        white-space: normal;
+                        overflow-wrap: anywhere;
+                        word-break: break-word;
+                        height: auto;
                     }}
                     .items-table th {{
                         font-weight: bold;
@@ -1012,6 +1029,8 @@ def export_invoice_docx(
         for paragraph in items_table.rows[0].cells[column_index].paragraphs:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+    _set_table_row_height(items_table, 0.7)
+
     if len(items_table.rows) < 3:
         raise ValueError("Bảng hàng hóa trong template.docx không đúng cấu trúc mong đợi")
 
@@ -1029,7 +1048,8 @@ def export_invoice_docx(
 
     save_dir = output_dir or EXPORT_DIR
     save_dir.mkdir(parents=True, exist_ok=True)
-    resolved_output_name = (output_name or f"{invoice_no}.docx").strip()
+    default_output_name = build_invoice_output_name(invoice_no, str(invoice.get("customer_name", "")))
+    resolved_output_name = (output_name or default_output_name).strip()
     if not resolved_output_name.lower().endswith(".docx"):
         resolved_output_name = f"{resolved_output_name}.docx"
     output_path = save_dir / resolved_output_name

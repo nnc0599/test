@@ -91,6 +91,9 @@ class RecentQuotationsDialog(QDialog):
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Họ tên", "Số điện thoại", "Tổng tiền hàng", "Ngày tạo đơn"])
         self.table.verticalHeader().setVisible(False)
+        self.table.setWordWrap(True)
+        self.table.setTextElideMode(Qt.ElideNone)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
@@ -156,6 +159,8 @@ class RecentQuotationsDialog(QDialog):
                 if col_index == 0:
                     item.setData(Qt.UserRole, int(row["id"]))
                 self.table.setItem(row_index, col_index, item)
+
+        self.table.resizeRowsToContents()
 
         if rows:
             self.table.selectRow(0)
