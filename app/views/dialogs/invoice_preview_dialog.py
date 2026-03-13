@@ -130,7 +130,7 @@ class InvoicePreviewDialog(QDialog):
         document.setBaseUrl(QUrl.fromLocalFile(f"{PREVIEW_ASSET_DIR}/"))
         document.setHtml(self.preview.toHtml())
         try:
-            document.print(printer)
+            document.print_(printer)
         except Exception as exc:
             QMessageBox.critical(self, "Lỗi", str(exc))
 
