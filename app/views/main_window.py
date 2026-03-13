@@ -209,10 +209,17 @@ class MainWindow(QMainWindow):
     def _build_order_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
+
+        compact_group_style = (
+            "QGroupBox { margin-top: 8px; padding: 6px; }"
+            "QGroupBox::title { left: 8px; padding: 0 3px; }"
+        )
+        compact_input_style = "padding: 4px 6px;"
 
         customer_box = QGroupBox("Thông tin lên đơn")
         customer_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        customer_box.setStyleSheet(compact_group_style)
         customer_grid = QGridLayout(customer_box)
         customer_grid.setContentsMargins(6, 4, 6, 4)
         customer_grid.setHorizontalSpacing(6)
@@ -230,6 +237,17 @@ class MainWindow(QMainWindow):
         self.customer_suggestion_list.setAlternatingRowColors(True)
         self.customer_suggestion_list.setMaximumHeight(120)
         self.customer_suggestion_list.hide()
+
+        for widget in [
+            self.order_name,
+            self.order_phone,
+            self.order_created_at,
+            self.order_address,
+            self.order_email,
+            self.order_tax_code,
+        ]:
+            widget.setStyleSheet(compact_input_style)
+            widget.setMinimumHeight(28)
 
         customer_grid.addWidget(QLabel("Nhập họ tên"), 0, 0)
         customer_grid.addWidget(self.order_name, 0, 1)
@@ -254,6 +272,7 @@ class MainWindow(QMainWindow):
 
         add_item_box = QGroupBox("Thêm hàng hóa")
         add_item_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add_item_box.setStyleSheet(compact_group_style)
         add_grid = QGridLayout(add_item_box)
         add_grid.setContentsMargins(6, 4, 6, 4)
         add_grid.setHorizontalSpacing(6)
@@ -263,7 +282,7 @@ class MainWindow(QMainWindow):
         self.search_product_edit.setPlaceholderText("Tìm kiếm sản phẩm")
         self.search_product_list = QListWidget()
         self.search_product_list.setAlternatingRowColors(True)
-        self.search_product_list.setMaximumHeight(140)
+        self.search_product_list.setMaximumHeight(120)
         self.search_product_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.search_product_list.hide()
 
@@ -273,6 +292,14 @@ class MainWindow(QMainWindow):
         self.order_price_spin.setRange(0, 2_000_000_000)
 
         self.add_line_btn = QPushButton("Thêm vào danh sách")
+        self.search_product_edit.setStyleSheet(compact_input_style)
+        self.search_product_edit.setMinimumHeight(28)
+        self.order_qty_spin.setStyleSheet(compact_input_style)
+        self.order_qty_spin.setMinimumHeight(28)
+        self.order_price_spin.setStyleSheet(compact_input_style)
+        self.order_price_spin.setMinimumHeight(28)
+        self.add_line_btn.setStyleSheet("padding: 6px 10px;")
+        self.add_line_btn.setMinimumHeight(30)
         self.add_line_btn.clicked.connect(self._append_invoice_line)
 
         add_grid.addWidget(QLabel("Tìm kiếm sản phẩm"), 0, 0)
@@ -329,14 +356,21 @@ class MainWindow(QMainWindow):
 
         self.export_location_box = QGroupBox("Nơi lưu file hóa đơn / báo giá")
         self.export_location_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.export_location_box.setStyleSheet(
+            "QGroupBox { margin-top: 8px; padding: 5px; }"
+            "QGroupBox::title { left: 8px; padding: 0 3px; }"
+            "QLabel { padding: 0px; margin: 0px; }"
+            "QPushButton { padding: 5px 9px; border-radius: 8px; }"
+        )
         export_location_layout = QHBoxLayout(self.export_location_box)
-        export_location_layout.setContentsMargins(6, 4, 6, 4)
-        export_location_layout.setSpacing(6)
+        export_location_layout.setContentsMargins(5, 3, 5, 3)
+        export_location_layout.setSpacing(4)
         self.export_dir_label = QLabel(str(self.invoice_export_dir))
         self.export_dir_label.setWordWrap(True)
         self.export_dir_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.choose_export_dir_btn = QPushButton("Chọn nơi lưu file")
         self.choose_export_dir_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.choose_export_dir_btn.setMinimumHeight(28)
         self.choose_export_dir_btn.clicked.connect(self._choose_invoice_export_dir)
         export_location_layout.addWidget(self.export_dir_label, 1)
         export_location_layout.addWidget(self.choose_export_dir_btn)
