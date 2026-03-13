@@ -29,14 +29,14 @@ DOCUMENT_VARIANTS = {
     "invoice": {
         "title": "PHIẾU XUẤT KHO KIÊM BẢO HÀNH",
         "confirm_text": "Xuất file Word",
-        "window_title": "Xem thông tin hóa đơn",
-        "hint": "Kiểm tra lại thông tin hóa đơn trước khi xuất file Word",
+        "window_title": "Xem trước hóa đơn A4",
+        "hint": "Xem trước bố cục in trên khổ giấy A4 trước khi xuất file Word",
     },
     "quotation": {
         "title": "BÁO GIÁ VẬT TƯ",
         "confirm_text": "Lưu bản báo giá",
-        "window_title": "Xem thông tin bản báo giá",
-        "hint": "Kiểm tra lại thông tin bản báo giá trước khi lưu file Word",
+        "window_title": "Xem trước bản báo giá A4",
+        "hint": "Xem trước bản báo giá trên khổ giấy A4 trước khi lưu file Word",
     },
 }
 
@@ -708,6 +708,10 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
     assets = _load_template_preview_assets()
     page_margin_mm = assets["page_margin_mm"]
     item_widths = assets["item_widths"]
+    is_quotation = document_kind == "quotation"
+    reference_label = "Báo giá" if is_quotation else "Số"
+    reference_value = str(invoice.get("quotation_no") or invoice.get("invoice_no") or "")
+    title_text = escape(str(variant["title"]))
     screen_image_uri = _image_file_to_data_uri(SCREEN_IMAGE_PATH)
     header_html = (
         f"<div class=\"header-image-wrap\"><img class=\"header-image\" src=\"{screen_image_uri}\" /></div>"
@@ -889,14 +893,14 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                 <div class="sheet">
                     <div class="header">{header_html}</div>
 
-                    <div class="title">PHIẾU XUẤT KHO KIÊM BẢO HÀNH</div>
+                    <div class="title">{title_text}</div>
 
                     <table class="meta-table">
                         <tr>
                             <td class="meta-left">Ngày {created_at.day:02d} tháng {created_at.month:02d} năm {created_at.year}</td>
                         </tr>
                         <tr class="meta-invoice-row">
-                            <td class="meta-left"><strong>Số:</strong> {escape(str(invoice.get('invoice_no', '')))}</td>
+                            <td class="meta-left"><strong>{escape(reference_label)}:</strong> {escape(reference_value)}</td>
                         </tr>
                     </table>
 

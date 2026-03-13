@@ -1486,8 +1486,8 @@ class MainWindow(QMainWindow):
             self,
             document_kind="quotation",
             show_confirm=False,
-            window_title="Xem thông tin bản báo giá",
-            hint_text="Hiển thị thông tin bản báo giá trước khi thao tác",
+            window_title="Xem trước bản báo giá A4",
+            hint_text="Hiển thị toàn bộ nội dung bản báo giá trên khổ giấy A4",
         )
         preview_dialog.exec()
 
