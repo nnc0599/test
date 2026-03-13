@@ -304,34 +304,8 @@ class MainWindow(QMainWindow):
         payment_layout.setContentsMargins(10, 10, 10, 10)
         payment_layout.setSpacing(8)
 
-        self.total_goods_text_label = QLabel("Tổng tiền hàng")
-        self.total_goods_label = QLabel("0")
-        self.ship_fee_text_label = QLabel("Phí ship")
-        self.ship_fee_spin = QSpinBox()
-        self.ship_fee_spin.setRange(0, 2_000_000_000)
-        self.ship_fee_spin.setValue(0)
         self.total_all_text_label = QLabel("Tổng số tiền")
         self.total_all_label = QLabel("0")
-
-        top_row = QHBoxLayout()
-        top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(24)
-
-        goods_row = QHBoxLayout()
-        goods_row.setContentsMargins(0, 0, 0, 0)
-        goods_row.setSpacing(8)
-        goods_row.addWidget(self.total_goods_text_label)
-        goods_row.addWidget(self.total_goods_label)
-        goods_row.addStretch(1)
-
-        ship_row = QHBoxLayout()
-        ship_row.setContentsMargins(0, 0, 0, 0)
-        ship_row.setSpacing(8)
-        ship_row.addWidget(self.ship_fee_text_label)
-        ship_row.addWidget(self.ship_fee_spin)
-
-        top_row.addLayout(goods_row, 1)
-        top_row.addLayout(ship_row, 1)
 
         total_row = QHBoxLayout()
         total_row.setContentsMargins(0, 0, 0, 0)
@@ -340,7 +314,6 @@ class MainWindow(QMainWindow):
         total_row.addWidget(self.total_all_label)
         total_row.addStretch(1)
 
-        payment_layout.addLayout(top_row)
         payment_layout.addLayout(total_row)
 
         self._apply_payment_summary_fonts()
@@ -396,7 +369,6 @@ class MainWindow(QMainWindow):
         self.search_product_edit.textChanged.connect(self._refresh_product_suggestions)
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
         self.search_product_list.itemClicked.connect(self._on_product_suggestion_clicked)
-        self.ship_fee_spin.valueChanged.connect(self._update_invoice_totals)
         self.order_name.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.order_phone.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.order_email.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
@@ -1226,13 +1198,12 @@ class MainWindow(QMainWindow):
 
     def _calculate_invoice_totals(self) -> tuple[int, int, int]:
         total_goods = sum(int(line["line_total"]) for line in self.invoice_lines)
-        ship_fee = self.ship_fee_spin.value()
-        total_all = total_goods + ship_fee
+        ship_fee = 0
+        total_all = total_goods
         return total_goods, ship_fee, total_all
 
     def _update_invoice_totals(self) -> None:
-        total_goods, _, total_all = self._calculate_invoice_totals()
-        self.total_goods_label.setText(format_money(total_goods))
+        _, _, total_all = self._calculate_invoice_totals()
         self.total_all_label.setText(format_money(total_all))
 
     def _build_order_customer_data(self) -> dict:
@@ -1328,7 +1299,6 @@ class MainWindow(QMainWindow):
         self.order_tax_code.clear()
         self.customer_suggestion_list.clear()
         self.customer_suggestion_list.hide()
-        self.ship_fee_spin.setValue(0)
         self._reset_add_item_inputs()
 
     def _remove_exported_file(self, export_path: Path) -> None:
@@ -1447,7 +1417,6 @@ class MainWindow(QMainWindow):
 
         self.customer_suggestion_list.clear()
         self.customer_suggestion_list.hide()
-        self.ship_fee_spin.setValue(int(quotation.get("ship_fee", 0) or 0))
         self.invoice_lines = [
             {
                 "product_code": str(item.get("product_code", "") or ""),
@@ -1909,21 +1878,9 @@ class MainWindow(QMainWindow):
         self.order_table.setColumnWidth(6, 88)
 
     def _apply_payment_summary_fonts(self) -> None:
-        top_row_font = QFont("Times New Roman")
-        top_row_font.setPixelSize(13)
-
         bottom_row_font = QFont("Times New Roman")
         bottom_row_font.setPixelSize(14)
         bottom_row_font.setBold(True)
-
-        for widget in [
-            getattr(self, "total_goods_text_label", None),
-            getattr(self, "total_goods_label", None),
-            getattr(self, "ship_fee_text_label", None),
-            getattr(self, "ship_fee_spin", None),
-        ]:
-            if widget is not None:
-                widget.setFont(top_row_font)
 
         for widget in [getattr(self, "total_all_text_label", None), getattr(self, "total_all_label", None)]:
             if widget is not None:
