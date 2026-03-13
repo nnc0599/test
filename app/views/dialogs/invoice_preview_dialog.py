@@ -1,25 +1,23 @@
 from __future__ import annotations
 
-from app.utils.invoice_docx import DOCUMENT_VARIANTS
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from PySide6.QtCore import Qt
-from PySide6.QtCore import QUrl
-from PySide6.QtGui import QPageLayout, QPageSize, QTextDocument
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QPageLayout, QPageSize, QPainter
+from PySide6.QtPdf import QPdfDocument
+from PySide6.QtPdfWidgets import QPdfView
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QDialog,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
-    QScrollArea,
-    QTextBrowser,
     QVBoxLayout,
-    QWidget,
 )
 
-from app.utils.invoice_docx import PREVIEW_ASSET_DIR, build_invoice_preview_html
+from app.utils.invoice_docx import DOCUMENT_VARIANTS, build_invoice_preview_pdf
 
 
 class InvoicePreviewDialog(QDialog):
@@ -45,46 +43,40 @@ class InvoicePreviewDialog(QDialog):
         self._document_kind = document_kind
         self._document_title = self.windowTitle()
         self._document_name = self._build_document_name(invoice, document_kind)
+        self._preview_dir = TemporaryDirectory(prefix="invoice-preview-")
+        self._preview_pdf_path = self._build_preview_pdf(invoice, items)
+        self._pdf_document = QPdfDocument(self)
+
+        load_error = self._pdf_document.load(str(self._preview_pdf_path))
+        if load_error != QPdfDocument.Error.None_:
+            raise ValueError("Không thể mở bản xem trước PDF")
 
         root = QVBoxLayout(self)
         hint = QLabel(hint_text or str(variant["hint"]))
         hint.setStyleSheet("color: #475569; font-style: italic;")
         root.addWidget(hint)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background: #E5E7EB; }")
-
-        page_host = QWidget()
-        page_layout = QVBoxLayout(page_host)
-        page_layout.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        page_layout.setContentsMargins(24, 24, 24, 24)
-
-        page_frame = QFrame()
-        page_frame.setFixedWidth(840)
-        page_frame.setStyleSheet(
-            "QFrame { background: white; border: 1px solid #CBD5E1; border-radius: 8px; }"
-        )
-
-        frame_layout = QVBoxLayout(page_frame)
-        frame_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.preview = QTextBrowser()
-        self.preview.setReadOnly(True)
-        self.preview.setOpenLinks(False)
-        self.preview.setSearchPaths([str(PREVIEW_ASSET_DIR)])
-        self.preview.setFrameShape(QFrame.NoFrame)
-        self.preview.setStyleSheet(
-            "QTextBrowser { background: white; color: #111827; padding: 0; border: none; }"
-        )
-        self.preview.setHtml(build_invoice_preview_html(invoice, items, document_kind=document_kind))
-
-        frame_layout.addWidget(self.preview)
-        page_layout.addWidget(page_frame)
-        scroll.setWidget(page_host)
-        root.addWidget(scroll, 1)
+        self.preview = QPdfView(self)
+        self.preview.setDocument(self._pdf_document)
+        self.preview.setPageMode(QPdfView.PageMode.MultiPage)
+        self.preview.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+        self.preview.setStyleSheet("QPdfView { background: #E5E7EB; border: none; }")
+        root.addWidget(self.preview, 1)
 
         actions = QHBoxLayout()
+
+        self.zoom_out_btn = QPushButton("Thu nhỏ")
+        self.zoom_out_btn.clicked.connect(self._zoom_out)
+        actions.addWidget(self.zoom_out_btn)
+
+        self.fit_width_btn = QPushButton("Vừa chiều rộng")
+        self.fit_width_btn.clicked.connect(self._fit_width)
+        actions.addWidget(self.fit_width_btn)
+
+        self.zoom_in_btn = QPushButton("Phóng to")
+        self.zoom_in_btn.clicked.connect(self._zoom_in)
+        actions.addWidget(self.zoom_in_btn)
+
         actions.addStretch()
 
         self.print_btn = QPushButton("In")
@@ -125,14 +117,59 @@ class InvoicePreviewDialog(QDialog):
         if dialog.exec() != QDialog.Accepted:
             return
 
-        document = QTextDocument(self)
-        document.setDefaultStyleSheet(self.preview.document().defaultStyleSheet())
-        document.setBaseUrl(QUrl.fromLocalFile(f"{PREVIEW_ASSET_DIR}/"))
-        document.setHtml(self.preview.toHtml())
+        painter = QPainter()
+        if not painter.begin(printer):
+            QMessageBox.critical(self, "Lỗi", "Không thể khởi tạo máy in")
+            return
+
         try:
-            document.print_(printer)
+            page_rect = printer.pageLayout().paintRectPixels(printer.resolution())
+            target_size = QSize(max(1, page_rect.width()), max(1, page_rect.height()))
+            for page_index in range(self._pdf_document.pageCount()):
+                if page_index > 0:
+                    printer.newPage()
+                image = self._pdf_document.render(page_index, target_size)
+                if image.isNull():
+                    continue
+                x_pos = page_rect.x() + max(0, (page_rect.width() - image.width()) // 2)
+                y_pos = page_rect.y() + max(0, (page_rect.height() - image.height()) // 2)
+                painter.drawImage(x_pos, y_pos, image)
         except Exception as exc:
             QMessageBox.critical(self, "Lỗi", str(exc))
+        finally:
+            painter.end()
+
+    def _zoom_in(self) -> None:
+        if self.preview.zoomMode() != QPdfView.ZoomMode.Custom:
+            self.preview.setZoomMode(QPdfView.ZoomMode.Custom)
+            self.preview.setZoomFactor(1.0)
+        self.preview.setZoomFactor(self.preview.zoomFactor() * 1.15)
+
+    def _zoom_out(self) -> None:
+        if self.preview.zoomMode() != QPdfView.ZoomMode.Custom:
+            self.preview.setZoomMode(QPdfView.ZoomMode.Custom)
+            self.preview.setZoomFactor(1.0)
+        self.preview.setZoomFactor(max(0.2, self.preview.zoomFactor() / 1.15))
+
+    def _fit_width(self) -> None:
+        self.preview.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+
+    def _build_preview_pdf(self, invoice: dict, items: list[dict]) -> Path:
+        try:
+            return build_invoice_preview_pdf(
+                invoice,
+                items,
+                output_dir=Path(self._preview_dir.name),
+                document_kind=self._document_kind,
+                output_name=f"{self._document_name}.docx",
+            )
+        except Exception:
+            self._preview_dir.cleanup()
+            raise
+
+    def closeEvent(self, event) -> None:
+        self._preview_dir.cleanup()
+        super().closeEvent(event)
 
     @staticmethod
     def _build_document_name(invoice: dict, document_kind: str) -> str:
