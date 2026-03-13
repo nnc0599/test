@@ -212,9 +212,11 @@ class MainWindow(QMainWindow):
         layout.setSpacing(8)
 
         customer_box = QGroupBox("Thông tin lên đơn")
+        customer_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         customer_grid = QGridLayout(customer_box)
-        customer_grid.setHorizontalSpacing(8)
-        customer_grid.setVerticalSpacing(6)
+        customer_grid.setContentsMargins(6, 4, 6, 4)
+        customer_grid.setHorizontalSpacing(6)
+        customer_grid.setVerticalSpacing(4)
 
         self.order_name = QLineEdit()
         self.order_phone = QLineEdit()
@@ -251,9 +253,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(customer_box)
 
         add_item_box = QGroupBox("Thêm hàng hóa")
+        add_item_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         add_grid = QGridLayout(add_item_box)
-        add_grid.setHorizontalSpacing(8)
-        add_grid.setVerticalSpacing(6)
+        add_grid.setContentsMargins(6, 4, 6, 4)
+        add_grid.setHorizontalSpacing(6)
+        add_grid.setVerticalSpacing(4)
 
         self.search_product_edit = QLineEdit()
         self.search_product_edit.setPlaceholderText("Tìm kiếm sản phẩm")
