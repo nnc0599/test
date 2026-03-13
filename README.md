@@ -125,6 +125,8 @@ Lệnh bổ sung:
 ./scripts/run_codespaces_gui.sh restart
 ```
 
+Lưu ý: chức năng tự mở file Word sau khi xuất sẽ dùng ứng dụng mặc định của môi trường đang chạy app. Nếu app đang chạy trong Codespaces hoặc container, việc mở file sẽ diễn ra trong môi trường đó, không bảo đảm mở trực tiếp trên PC host.
+
 ## Mật khẩu quản trị mặc định
 
 - `12345678`
@@ -138,3 +140,4 @@ Lệnh bổ sung:
 	- Lưu hóa đơn + chi tiết hóa đơn
 	- Trừ tồn kho
 	- Tạo bản ghi thanh toán
+	- Thử mở file Word vừa xuất bằng ứng dụng mặc định của hệ điều hành

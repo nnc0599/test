@@ -4,8 +4,8 @@ from typing import Any
 
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QEvent, QEasingCurve, QPropertyAnimation, QSettings, Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QDate, QEvent, QEasingCurve, QPropertyAnimation, QSettings, Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -1338,6 +1338,20 @@ class MainWindow(QMainWindow):
         except OSError:
             pass
 
+    def _open_exported_document(self, export_path: Path) -> str | None:
+        try:
+            resolved_path = export_path.resolve()
+        except OSError:
+            resolved_path = export_path
+
+        if QDesktopServices.openUrl(QUrl.fromLocalFile(str(resolved_path))):
+            return None
+
+        return (
+            "Đã xuất file nhưng không thể mở tự động bằng ứng dụng mặc định.\n"
+            f"Bạn có thể mở thủ công tại:\n{resolved_path}"
+        )
+
     def _save_quotation(self) -> None:
         quotation_id: int | None = None
         created_new_quotation = False
@@ -1372,10 +1386,18 @@ class MainWindow(QMainWindow):
             if old_export_path and old_export_path != str(export_path):
                 self._remove_exported_file(Path(old_export_path))
 
+            open_error = self._open_exported_document(export_path)
+            message = (
+                f"Đã {'cập nhật' if self._editing_quotation_id is not None else 'lưu'} bản báo giá\n"
+                f"File Word: {export_path}"
+            )
+            if open_error:
+                message = f"{message}\n\n{open_error}"
+
             QMessageBox.information(
                 self,
                 "Thành công",
-                f"Đã {'cập nhật' if self._editing_quotation_id is not None else 'lưu'} bản báo giá\nFile Word: {export_path}",
+                message,
             )
             self._reset_order_form()
             self.refresh_products()
@@ -1513,10 +1535,15 @@ class MainWindow(QMainWindow):
                 self._remove_exported_file(export_path)
                 raise
 
+            open_error = self._open_exported_document(export_path)
+            message = f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}"
+            if open_error:
+                message = f"{message}\n\n{open_error}"
+
             QMessageBox.information(
                 self,
                 "Thành công",
-                f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}",
+                message,
             )
             self.refresh_products()
             self.refresh_report()
@@ -1573,10 +1600,15 @@ class MainWindow(QMainWindow):
                 self._remove_exported_file(export_path)
                 raise
 
+            open_error = self._open_exported_document(export_path)
+            message = f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}"
+            if open_error:
+                message = f"{message}\n\n{open_error}"
+
             QMessageBox.information(
                 self,
                 "Thành công",
-                f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}",
+                message,
             )
             self._reset_order_form()
             self.refresh_products()
