@@ -3,11 +3,15 @@ from __future__ import annotations
 from app.utils.invoice_docx import DOCUMENT_VARIANTS
 
 from PySide6.QtCore import Qt
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QPageLayout, QPageSize, QTextDocument
+from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QTextBrowser,
@@ -38,6 +42,9 @@ class InvoicePreviewDialog(QDialog):
 
         self._confirmed = False
         self._show_confirm = show_confirm
+        self._document_kind = document_kind
+        self._document_title = self.windowTitle()
+        self._document_name = self._build_document_name(invoice, document_kind)
 
         root = QVBoxLayout(self)
         hint = QLabel(hint_text or str(variant["hint"]))
@@ -80,6 +87,10 @@ class InvoicePreviewDialog(QDialog):
         actions = QHBoxLayout()
         actions.addStretch()
 
+        self.print_btn = QPushButton("In")
+        self.print_btn.clicked.connect(self._print_preview)
+        actions.addWidget(self.print_btn)
+
         self.close_btn = QPushButton("Đóng")
         self.close_btn.clicked.connect(self.reject)
         actions.addWidget(self.close_btn)
@@ -102,6 +113,35 @@ class InvoicePreviewDialog(QDialog):
             return
         self._confirmed = True
         self.accept()
+
+    def _print_preview(self) -> None:
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setPageSize(QPageSize(QPageSize.A4))
+        printer.setPageOrientation(QPageLayout.Portrait)
+        printer.setDocName(self._document_name)
+
+        dialog = QPrintDialog(printer, self)
+        dialog.setWindowTitle(f"In {self._document_title.lower()}")
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        document = QTextDocument(self)
+        document.setDefaultStyleSheet(self.preview.document().defaultStyleSheet())
+        document.setBaseUrl(QUrl.fromLocalFile(f"{PREVIEW_ASSET_DIR}/"))
+        document.setHtml(self.preview.toHtml())
+        try:
+            document.print(printer)
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi", str(exc))
+
+    @staticmethod
+    def _build_document_name(invoice: dict, document_kind: str) -> str:
+        if document_kind == "quotation":
+            reference = str(invoice.get("quotation_no") or invoice.get("invoice_no") or "bao-gia")
+            return f"Bao-gia-{reference}"
+
+        reference = str(invoice.get("invoice_no") or "hoa-don")
+        return f"Hoa-don-{reference}"
 
     @property
     def confirmed(self) -> bool:
