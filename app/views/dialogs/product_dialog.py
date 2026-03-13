@@ -4,13 +4,16 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGridLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
+    QPushButton,
     QSpinBox,
     QVBoxLayout,
 )
@@ -19,11 +22,22 @@ from app.utils.time_utils import now_iso_utc7
 
 
 class ProductFormDialog(QDialog):
-    def __init__(self, parent=None, mode: str = "add", initial: dict | None = None):
+    def __init__(
+        self,
+        parent=None,
+        mode: str = "add",
+        initial: dict | None = None,
+        import_loader=None,
+        template_exporter=None,
+    ):
         super().__init__(parent)
         self.mode = mode
         self.initial = initial or {}
+        self.import_loader = import_loader
+        self.template_exporter = template_exporter
         self._payload_cache: dict | None = None
+        self._import_payloads_cache: list[dict] = []
+        self._missing_code_count = 0
 
         self.setModal(True)
         self.resize(760, 560)
@@ -90,12 +104,25 @@ class ProductFormDialog(QDialog):
         self.buttons.accepted.connect(self._validate_before_accept)
         self.buttons.rejected.connect(self.reject)
 
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        if mode == "add":
+            if self.template_exporter is not None:
+                self.download_template_button = QPushButton("Tải file mẫu")
+                self.download_template_button.clicked.connect(self._handle_download_template)
+                action_row.addWidget(self.download_template_button)
+            if self.import_loader is not None:
+                self.upload_button = QPushButton("Upload file")
+                self.upload_button.clicked.connect(self._handle_upload_file)
+                action_row.addWidget(self.upload_button)
+        action_row.addWidget(self.buttons)
+
         root = QVBoxLayout(self)
         root.addWidget(product_box)
         root.addWidget(description_box)
         if mode == "edit":
             root.addWidget(self.note_box)
-        root.addWidget(self.buttons)
+        root.addLayout(action_row)
 
         self._bind_data()
         self._bind_rules()
@@ -154,5 +181,66 @@ class ProductFormDialog(QDialog):
         self._payload_cache = payload
         self.accept()
 
+    def _handle_upload_file(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Chọn file sản phẩm",
+            "",
+            "Excel Files (*.xlsx *.xlsm)",
+        )
+        if not file_path:
+            return
+
+        try:
+            payloads, missing_code_count = self.import_loader(file_path)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Thông báo", str(exc))
+            return
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi", str(exc))
+            return
+
+        if not payloads:
+            if missing_code_count > 0:
+                QMessageBox.warning(
+                    self,
+                    "Thông báo",
+                    f"Có {missing_code_count} sản phẩm không có Mã sản phẩm.",
+                )
+                return
+            QMessageBox.warning(self, "Thông báo", "File không có dữ liệu sản phẩm")
+            return
+
+        self._import_payloads_cache = payloads
+        self._missing_code_count = missing_code_count
+        self.accept()
+
+    def _handle_download_template(self) -> None:
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Lưu file mẫu sản phẩm",
+            "san_pham_import_mau.xlsx",
+            "Excel Files (*.xlsx)",
+        )
+        if not file_path:
+            return
+
+        if not file_path.lower().endswith(".xlsx"):
+            file_path = f"{file_path}.xlsx"
+
+        try:
+            self.template_exporter(file_path)
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi", str(exc))
+            return
+
+        QMessageBox.information(self, "Thành công", "Đã tải file mẫu thành công")
+
     def payload(self) -> dict:
         return dict(self._payload_cache or self._collect_payload())
+
+    def imported_payloads(self) -> list[dict]:
+        return [dict(item) for item in self._import_payloads_cache]
+
+    def missing_code_count(self) -> int:
+        return self._missing_code_count

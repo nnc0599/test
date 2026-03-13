@@ -1650,13 +1650,26 @@ class MainWindow(QMainWindow):
     def _on_add_product(self) -> None:
         if not PasswordDialog.verify(self, "Xác thực thêm sản phẩm"):
             return
-        dlg = ProductFormDialog(self, mode="add")
+        dlg = ProductFormDialog(
+            self,
+            mode="add",
+            import_loader=self.product_controller.parse_product_import_file,
+            template_exporter=self.product_controller.export_product_import_template,
+        )
         if dlg.exec() != ProductFormDialog.Accepted:
             return
         try:
-            self.product_controller.create_product(dlg.payload())
+            imported_payloads = dlg.imported_payloads()
+            if imported_payloads:
+                self.product_controller.create_products(imported_payloads)
+            else:
+                self.product_controller.create_product(dlg.payload())
             self.refresh_products()
-            QMessageBox.information(self, "Thành công", "Đã thêm sản phẩm mới")
+            message = "Đã thêm sản phẩm thành công"
+            missing_code_count = dlg.missing_code_count()
+            if missing_code_count > 0:
+                message += f"\nCó {missing_code_count} sản phẩm không có Mã sản phẩm."
+            QMessageBox.information(self, "Thành công", message)
         except Exception as exc:
             QMessageBox.critical(self, "Lỗi", str(exc))
 

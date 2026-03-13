@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Iterable
 import re
 
@@ -49,6 +50,50 @@ class ProductRepository:
                     payload.get("description", ""),
                     payload.get("note", ""),
                 ),
+            )
+
+    def add_products(self, payloads: list[dict]) -> None:
+        product_codes = [payload["product_code"].strip() for payload in payloads]
+        duplicated_codes = sorted(
+            code for code, count in Counter(product_codes).items() if code and count > 1
+        )
+        if duplicated_codes:
+            raise ValueError(
+                "Mã sản phẩm bị trùng trong file: " + ", ".join(duplicated_codes)
+            )
+
+        with get_connection() as conn:
+            placeholders = ", ".join("?" for _ in product_codes)
+            existing_rows = conn.execute(
+                f"SELECT product_code FROM products WHERE product_code IN ({placeholders})",
+                product_codes,
+            ).fetchall()
+            existing_codes = sorted(row["product_code"] for row in existing_rows)
+            if existing_codes:
+                raise ValueError(
+                    "Mã sản phẩm đã tồn tại: " + ", ".join(existing_codes)
+                )
+
+            current_time = now_iso_utc7()
+            conn.executemany(
+                """
+                INSERT INTO products (
+                    product_code, name, unit, quantity, sale_price, updated_at, description, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        payload["product_code"],
+                        payload.get("name", ""),
+                        payload.get("unit", ""),
+                        int(payload.get("quantity", 0)),
+                        int(payload.get("sale_price", 0)),
+                        current_time,
+                        payload.get("description", ""),
+                        payload.get("note", ""),
+                    )
+                    for payload in payloads
+                ],
             )
 
     def update_product(self, product_code: str, payload: dict) -> None:
