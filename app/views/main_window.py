@@ -868,15 +868,7 @@ class MainWindow(QMainWindow):
                 self.invoice_export_dir,
                 output_name=build_invoice_output_name(invoice_no, detail["invoice"].get("customer_name", "")),
             )
-            open_error = self._open_exported_document(export_path)
-            message = f"Đã xuất file Word cho hóa đơn {invoice_no}\nFile Word: {export_path}"
-            if open_error:
-                message = f"{message}\n\n{open_error}"
-            QMessageBox.information(
-                self,
-                "Thành công",
-                message,
-            )
+            self._warn_open_export_failure(export_path)
         except Exception as exc:  # pragma: no cover - dialog feedback
             QMessageBox.critical(self, "Lỗi", str(exc))
 
@@ -917,7 +909,7 @@ class MainWindow(QMainWindow):
             centered_columns={0, 1, 3, 4},
             output_dir=self.invoice_export_dir,
         )
-        QMessageBox.information(self, "Xuất thành công", f"Đã lưu file Word tại:\n{report_path}")
+        self._warn_open_export_failure(report_path)
 
     def _export_goods_report(self) -> None:
         report_type = getattr(self, "_current_goods_report_type", "sold")
@@ -982,7 +974,7 @@ class MainWindow(QMainWindow):
             centered_columns=centered_columns,
             output_dir=self.invoice_export_dir,
         )
-        QMessageBox.information(self, "Xuất thành công", f"Đã lưu file Word tại:\n{report_path}")
+        self._warn_open_export_failure(report_path)
 
     def _switch_tab(self, idx: int) -> None:
         self.stack.setCurrentIndex(idx)
@@ -1365,19 +1357,7 @@ class MainWindow(QMainWindow):
             if old_export_path and old_export_path != str(export_path):
                 self._remove_exported_file(Path(old_export_path))
 
-            open_error = self._open_exported_document(export_path)
-            message = (
-                f"Đã {'cập nhật' if self._editing_quotation_id is not None else 'lưu'} bản báo giá\n"
-                f"File Word: {export_path}"
-            )
-            if open_error:
-                message = f"{message}\n\n{open_error}"
-
-            QMessageBox.information(
-                self,
-                "Thành công",
-                message,
-            )
+            self._warn_open_export_failure(export_path)
             self._reset_order_form()
             self.refresh_products()
             self.refresh_report()
@@ -1846,15 +1826,7 @@ class MainWindow(QMainWindow):
                 document_kind="invoice",
                 output_name=build_invoice_output_name(invoice_no, detail["invoice"].get("customer_name", "")),
             )
-            open_error = self._open_exported_document(export_path)
-            message = f"Đã xuất lại file Word cho hóa đơn {invoice_no}\nFile Word: {export_path}"
-            if open_error:
-                message = f"{message}\n\n{open_error}"
-            QMessageBox.information(
-                self,
-                "Thành công",
-                message,
-            )
+            self._warn_open_export_failure(export_path)
         except Exception as exc:  # pragma: no cover - dialog feedback
             QMessageBox.critical(self, "Lỗi", str(exc))
 
