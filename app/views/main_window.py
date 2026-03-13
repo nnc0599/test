@@ -72,6 +72,9 @@ class MainWindow(QMainWindow):
         self.product_map: dict[str, dict[str, Any]] = {}
         self.invoice_lines: list[dict[str, Any]] = []
         self.selected_product_code: str | None = None
+        self._editing_quotation_id: int | None = None
+        self._editing_quotation_export_path = ""
+        self._order_created_at_override: str | None = None
         self._suspend_product_search = False
         self._suspend_customer_search = False
         self._selected_product_stock = 0
@@ -752,7 +755,7 @@ class MainWindow(QMainWindow):
         self._clock_timer = timer
 
     def _refresh_clock(self) -> None:
-        self.order_created_at.setText(now_iso_utc7())
+        self.order_created_at.setText(self._order_created_at_override or now_iso_utc7())
 
     def _apply_period_editor_format(self, editor: QDateEdit, period_type: str) -> None:
         if period_type == "day":
@@ -1302,7 +1305,19 @@ class MainWindow(QMainWindow):
         self.order_price_spin.setValue(0)
         self.search_product_edit.setFocus()
 
+    def _set_order_editing_state(self, quotation_id: int | None, export_path: str = "") -> None:
+        self._editing_quotation_id = quotation_id
+        self._editing_quotation_export_path = export_path
+        if quotation_id is None:
+            self.save_quote_btn.setText("Lưu bản báo giá")
+            self.export_btn.setText("Xuất hóa đơn")
+            return
+        self.save_quote_btn.setText("Cập nhật bản báo giá")
+        self.export_btn.setText("Xuất hóa đơn từ báo giá")
+
     def _reset_order_form(self) -> None:
+        self._set_order_editing_state(None)
+        self._order_created_at_override = None
         self.invoice_lines.clear()
         self._render_invoice_lines()
         self._update_invoice_totals()
@@ -1325,18 +1340,26 @@ class MainWindow(QMainWindow):
 
     def _save_quotation(self) -> None:
         quotation_id: int | None = None
+        created_new_quotation = False
         try:
             customer_data, quotation_data, export_lines = self._build_order_document_data()
             confirmed = self._show_document_preview(
                 quotation_data,
                 export_lines,
                 "quotation",
-                confirm_text="Lưu bản báo giá",
+                confirm_text="Cập nhật bản báo giá" if self._editing_quotation_id is not None else "Lưu bản báo giá",
             )
             if not confirmed:
                 return
 
-            quotation_id = self.order_controller.create_quotation(customer_data, quotation_data, export_lines)
+            old_export_path = self._editing_quotation_export_path
+            if self._editing_quotation_id is None:
+                quotation_id = self.order_controller.create_quotation(customer_data, quotation_data, export_lines)
+                created_new_quotation = True
+            else:
+                quotation_id = self._editing_quotation_id
+                self.order_controller.update_quotation(quotation_id, customer_data, quotation_data, export_lines)
+
             output_name = build_quotation_output_name(customer_data["full_name"], quotation_data["created_at"])
             export_path = export_invoice_docx(
                 quotation_data,
@@ -1346,17 +1369,19 @@ class MainWindow(QMainWindow):
                 output_name=output_name,
             )
             self.order_controller.update_quotation_export_path(quotation_id, str(export_path))
+            if old_export_path and old_export_path != str(export_path):
+                self._remove_exported_file(Path(old_export_path))
 
             QMessageBox.information(
                 self,
                 "Thành công",
-                f"Đã lưu bản báo giá\nFile Word: {export_path}",
+                f"Đã {'cập nhật' if self._editing_quotation_id is not None else 'lưu'} bản báo giá\nFile Word: {export_path}",
             )
             self._reset_order_form()
             self.refresh_products()
             self.refresh_report()
         except Exception as exc:  # pragma: no cover - dialog feedback
-            if quotation_id is not None:
+            if created_new_quotation and quotation_id is not None:
                 try:
                     self.order_controller.cancel_quotation(quotation_id)
                 except Exception:
@@ -1366,12 +1391,53 @@ class MainWindow(QMainWindow):
     def _open_recent_quotations(self) -> None:
         dialog = RecentQuotationsDialog(
             load_rows=lambda: self.order_controller.list_recent_quotations(100),
-            on_view=self._view_quotation_preview,
+            on_edit=self._edit_quotation_from_dialog,
             on_export=self._export_quotation_from_dialog,
             on_cancel=self._cancel_quotation_from_dialog,
             parent=self,
         )
         dialog.exec()
+
+    def _edit_quotation_from_dialog(self, quotation_id: int) -> bool:
+        detail = self.order_controller.get_quotation_detail(quotation_id)
+        if not detail:
+            QMessageBox.warning(self, "Không tìm thấy", "Không lấy được chi tiết bản báo giá")
+            return False
+
+        quotation = detail["quotation"]
+        items = detail["items"]
+
+        self._set_order_editing_state(quotation_id, str(quotation.get("export_path", "") or ""))
+        self._order_created_at_override = str(quotation.get("created_at", "") or now_iso_utc7())
+
+        self._suspend_customer_search = True
+        self.order_name.setText(str(quotation.get("customer_name", "") or ""))
+        self.order_phone.setText(str(quotation.get("phone", "") or ""))
+        self.order_address.setText(str(quotation.get("address", "") or ""))
+        self.order_email.setText(str(quotation.get("email", "") or ""))
+        self.order_tax_code.setText(str(quotation.get("tax_code", "") or ""))
+        self._suspend_customer_search = False
+
+        self.customer_suggestion_list.clear()
+        self.customer_suggestion_list.hide()
+        self.ship_fee_spin.setValue(int(quotation.get("ship_fee", 0) or 0))
+        self.invoice_lines = [
+            {
+                "product_code": str(item.get("product_code", "") or ""),
+                "product_name": str(item.get("product_name", "") or ""),
+                "unit": str(item.get("unit", "") or ""),
+                "quantity": int(item.get("quantity", 0) or 0),
+                "unit_price": int(item.get("unit_price", 0) or 0),
+                "line_total": int(item.get("line_total", 0) or 0),
+            }
+            for item in items
+        ]
+        self._render_invoice_lines()
+        self._update_invoice_totals()
+        self._reset_add_item_inputs()
+        self._switch_tab(0)
+        self._refresh_clock()
+        return True
 
     def _view_quotation_preview(self, quotation_id: int) -> None:
         detail = self.order_controller.get_quotation_detail(quotation_id)
@@ -1493,7 +1559,16 @@ class MainWindow(QMainWindow):
                 output_name=build_invoice_output_name(invoice_no, customer_data.get("full_name", "")),
             )
             try:
-                self.order_controller.create_invoice(customer_data, invoice_data, export_lines)
+                if self._editing_quotation_id is None:
+                    self.order_controller.create_invoice(customer_data, invoice_data, export_lines)
+                else:
+                    self.order_controller.update_quotation(
+                        self._editing_quotation_id,
+                        customer_data,
+                        invoice_data,
+                        export_lines,
+                    )
+                    self.order_controller.export_quotation_to_invoice(self._editing_quotation_id, invoice_no)
             except Exception:
                 self._remove_exported_file(export_path)
                 raise

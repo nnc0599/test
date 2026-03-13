@@ -392,6 +392,73 @@ class InvoiceRepository:
             )
             return quotation_id
 
+    def update_quotation(self, quotation_id: int, payload: dict, lines: list[dict]) -> None:
+        with get_connection() as conn:
+            existing = conn.execute(
+                """
+                SELECT id, status
+                FROM quotations
+                WHERE id = ?
+                """,
+                (quotation_id,),
+            ).fetchone()
+            if not existing:
+                raise ValueError("Không tìm thấy bản báo giá")
+            if str(existing["status"] or "") != "pending":
+                raise ValueError("Bản báo giá này không còn khả dụng để chỉnh sửa")
+
+            conn.execute(
+                """
+                UPDATE quotations
+                SET
+                    created_at = ?,
+                    customer_name = ?,
+                    phone = ?,
+                    email = ?,
+                    tax_code = ?,
+                    address = ?,
+                    goods_amount = ?,
+                    ship_fee = ?,
+                    total_amount = ?,
+                    status = 'pending',
+                    exported_invoice_no = ''
+                WHERE id = ?
+                """,
+                (
+                    payload["created_at"],
+                    payload["customer_name"],
+                    payload.get("phone", ""),
+                    payload.get("email", ""),
+                    payload.get("tax_code", ""),
+                    payload.get("address", ""),
+                    int(payload.get("goods_amount", 0)),
+                    int(payload.get("ship_fee", 0)),
+                    int(payload["total_amount"]),
+                    quotation_id,
+                ),
+            )
+
+            conn.execute("DELETE FROM quotation_items WHERE quotation_id = ?", (quotation_id,))
+            conn.executemany(
+                """
+                INSERT INTO quotation_items (
+                    quotation_id, product_code, product_name, unit, quantity, unit_price, line_total
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        quotation_id,
+                        line["product_code"],
+                        line["product_name"],
+                        line.get("unit", ""),
+                        int(line["quantity"]),
+                        int(line["unit_price"]),
+                        int(line["line_total"]),
+                    )
+                    for line in lines
+                ],
+            )
+
     def update_quotation_export_path(self, quotation_id: int, export_path: str) -> None:
         with get_connection() as conn:
             conn.execute(

@@ -94,6 +94,26 @@ class OrderController:
         }
         return self.invoice_repo.create_quotation(payload, lines)
 
+    def update_quotation(self, quotation_id: int, customer_data: dict, quotation_data: dict, lines: list[dict]) -> None:
+        if not lines:
+            raise ValueError("Báo giá phải có ít nhất 1 hàng hóa")
+        if not customer_data.get("full_name", "").strip():
+            raise ValueError("Họ tên khách hàng không được để trống")
+
+        created_at = quotation_data.get("created_at") or now_iso_utc7()
+        payload = {
+            "created_at": created_at,
+            "customer_name": customer_data["full_name"],
+            "phone": customer_data.get("phone", ""),
+            "address": customer_data.get("address", ""),
+            "email": customer_data.get("email", ""),
+            "tax_code": customer_data.get("tax_code", ""),
+            "goods_amount": int(quotation_data.get("goods_amount", 0)),
+            "ship_fee": int(quotation_data.get("ship_fee", 0)),
+            "total_amount": int(quotation_data["total_amount"]),
+        }
+        self.invoice_repo.update_quotation(quotation_id, payload, lines)
+
     def update_quotation_export_path(self, quotation_id: int, export_path: str) -> None:
         self.invoice_repo.update_quotation_export_path(quotation_id, export_path)
 

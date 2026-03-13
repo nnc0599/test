@@ -25,7 +25,7 @@ class RecentQuotationsDialog(QDialog):
     def __init__(
         self,
         load_rows: Callable[[], list[dict]],
-        on_view: Callable[[int], None],
+        on_edit: Callable[[int], bool],
         on_export: Callable[[int], bool],
         on_cancel: Callable[[int], bool],
         parent=None,
@@ -36,7 +36,7 @@ class RecentQuotationsDialog(QDialog):
         self.resize(980, 620)
 
         self._load_rows = load_rows
-        self._on_view = on_view
+        self._on_edit = on_edit
         self._on_export = on_export
         self._on_cancel = on_cancel
 
@@ -48,7 +48,7 @@ class RecentQuotationsDialog(QDialog):
         heading.setStyleSheet("font-size: 24px; font-weight: 900; color: #0F172A;")
         root.addWidget(heading)
 
-        hint = QLabel("Chọn một bản báo giá trước, sau đó dùng các nút nổi bật bên dưới để xem, xuất hóa đơn hoặc hủy đơn.")
+        hint = QLabel("Chọn một bản báo giá trước, sau đó dùng các nút nổi bật bên dưới để sửa, xuất hóa đơn hoặc hủy đơn.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #475569; font-style: italic;")
         root.addWidget(hint)
@@ -61,13 +61,13 @@ class RecentQuotationsDialog(QDialog):
         action_layout.setContentsMargins(14, 14, 14, 14)
         action_layout.setSpacing(12)
 
-        self.view_btn = QPushButton("Xem hóa đơn")
+        self.edit_btn = QPushButton("Sửa hóa đơn")
         self.export_btn = QPushButton("Xuất hóa đơn")
         self.cancel_btn = QPushButton("Hủy đơn")
-        for button in [self.view_btn, self.export_btn, self.cancel_btn]:
+        for button in [self.edit_btn, self.export_btn, self.cancel_btn]:
             button.setMinimumHeight(54)
 
-        self.view_btn.setStyleSheet(
+        self.edit_btn.setStyleSheet(
             "QPushButton { background: #0EA5E9; color: white; font-weight: 900; border-radius: 14px; }"
             "QPushButton:hover { background: #0284C7; }"
             "QPushButton:disabled { background: #BAE6FD; color: #7C93A6; }"
@@ -83,7 +83,7 @@ class RecentQuotationsDialog(QDialog):
             "QPushButton:disabled { background: #FECACA; color: #6B7280; }"
         )
 
-        action_layout.addWidget(self.view_btn)
+        action_layout.addWidget(self.edit_btn)
         action_layout.addWidget(self.export_btn)
         action_layout.addWidget(self.cancel_btn)
         root.addWidget(action_panel)
@@ -113,7 +113,7 @@ class RecentQuotationsDialog(QDialog):
         root.addLayout(footer)
 
         self.table.itemSelectionChanged.connect(self._sync_action_state)
-        self.view_btn.clicked.connect(self._handle_view)
+        self.edit_btn.clicked.connect(self._handle_edit)
         self.export_btn.clicked.connect(self._handle_export)
         self.cancel_btn.clicked.connect(self._handle_cancel)
 
@@ -140,7 +140,7 @@ class RecentQuotationsDialog(QDialog):
 
     def _sync_action_state(self) -> None:
         has_selection = self._selected_quotation_id() is not None
-        self.view_btn.setEnabled(has_selection)
+        self.edit_btn.setEnabled(has_selection)
         self.export_btn.setEnabled(has_selection)
         self.cancel_btn.setEnabled(has_selection)
 
@@ -166,11 +166,12 @@ class RecentQuotationsDialog(QDialog):
             self.table.selectRow(0)
         self._sync_action_state()
 
-    def _handle_view(self) -> None:
+    def _handle_edit(self) -> None:
         quotation_id = self._selected_quotation_id()
         if quotation_id is None:
             return
-        self._on_view(quotation_id)
+        if self._on_edit(quotation_id):
+            self.accept()
 
     def _handle_export(self) -> None:
         quotation_id = self._selected_quotation_id()
