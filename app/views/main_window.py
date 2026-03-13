@@ -1352,6 +1352,11 @@ class MainWindow(QMainWindow):
             f"Bạn có thể mở thủ công tại:\n{resolved_path}"
         )
 
+    def _warn_open_export_failure(self, export_path: Path) -> None:
+        open_error = self._open_exported_document(export_path)
+        if open_error:
+            QMessageBox.warning(self, "Không thể mở file tự động", open_error)
+
     def _save_quotation(self) -> None:
         quotation_id: int | None = None
         created_new_quotation = False
@@ -1535,16 +1540,7 @@ class MainWindow(QMainWindow):
                 self._remove_exported_file(export_path)
                 raise
 
-            open_error = self._open_exported_document(export_path)
-            message = f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}"
-            if open_error:
-                message = f"{message}\n\n{open_error}"
-
-            QMessageBox.information(
-                self,
-                "Thành công",
-                message,
-            )
+            self._warn_open_export_failure(export_path)
             self.refresh_products()
             self.refresh_report()
             return True
@@ -1600,16 +1596,7 @@ class MainWindow(QMainWindow):
                 self._remove_exported_file(export_path)
                 raise
 
-            open_error = self._open_exported_document(export_path)
-            message = f"Đã xuất hóa đơn {invoice_no}\nFile Word: {export_path}"
-            if open_error:
-                message = f"{message}\n\n{open_error}"
-
-            QMessageBox.information(
-                self,
-                "Thành công",
-                message,
-            )
+            self._warn_open_export_failure(export_path)
             self._reset_order_form()
             self.refresh_products()
             self.refresh_report()

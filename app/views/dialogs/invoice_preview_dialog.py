@@ -46,7 +46,7 @@ class InvoicePreviewDialog(QDialog):
         self.preview.setReadOnly(True)
         self.preview.setHtml(build_invoice_preview_html(invoice, items, document_kind=document_kind))
         self.preview.setStyleSheet(
-            "QTextBrowser { background: #E5E7EB; border: none; padding: 18px; }"
+            "QTextBrowser { background: #CBD5E1; border: none; padding: 12px; }"
         )
         root.addWidget(self.preview, 1)
 

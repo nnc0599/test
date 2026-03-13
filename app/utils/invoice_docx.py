@@ -735,17 +735,38 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
     )
 
     total_amount = int(invoice.get("total_amount", 0))
+    quotation_summary_html = ""
+    if is_quotation:
+        quotation_summary_html = f"""
+                    <table class=\"summary-table\">
+                        <tr>
+                            <td><strong>Tổng tiền hàng:</strong> {format_money(int(invoice.get('goods_amount', 0) or 0))}</td>
+                            <td><strong>Phí ship:</strong> {format_money(int(invoice.get('ship_fee', 0) or 0))}</td>
+                            <td><strong>Tổng cộng:</strong> {format_money(total_amount)}</td>
+                        </tr>
+                    </table>
+        """
     return f"""
         <html>
             <head>
                 <style>
+                    * {{
+                        box-sizing: border-box;
+                    }}
                     body {{
                         font-family: 'Times New Roman';
                         font-size: 12pt;
                         color: #111827;
                         line-height: 1.25;
-                        background: #ffffff;
+                        background: #D6DCE5;
                         margin: 0;
+                        padding: 22px 0 28px;
+                    }}
+                    .page-wrap {{
+                        width: 100%;
+                        display: flex;
+                        justify-content: center;
+                        padding: 0 18px;
                     }}
                     .sheet {{
                         width: 210mm;
@@ -753,6 +774,9 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                         box-sizing: border-box;
                         padding: {page_margin_mm['top']}mm {page_margin_mm['right']}mm {page_margin_mm['bottom']}mm {page_margin_mm['left']}mm;
                         text-align: center;
+                        background: #ffffff;
+                        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+                        border: 1px solid #CBD5E1;
                     }}
                     .header {{
                         width: 100%;
@@ -782,6 +806,12 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                         width: 100%;
                         border-collapse: collapse;
                     }}
+                    .summary-table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        table-layout: fixed;
+                        margin: 0.5mm 0 2.4mm;
+                    }}
                     .meta-table td, .info-table td, .signatures td {{
                         border: none;
                         padding: 0;
@@ -793,7 +823,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                         text-align: center;
                     }}
                     .meta-table {{
-                        margin: 0 0 1.5mm;
+                        margin: 0 0 1.7mm;
                     }}
                     .meta-table td {{
                         padding: 0;
@@ -822,8 +852,15 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                     .info-address {{
                         padding-top: 1mm;
                     }}
+                    .summary-table td {{
+                        width: 33.33%;
+                        border: 1px solid #111827;
+                        padding: 1.4mm 1.2mm;
+                        text-align: center;
+                        font-size: 11.5pt;
+                    }}
                     .items-table {{
-                        margin-top: 0.8mm;
+                        margin-top: 1.2mm;
                         table-layout: fixed;
                     }}
                     .items-table th, .items-table td {{
@@ -863,10 +900,11 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                         font-weight: bold;
                     }}
                     .money-words {{
-                        margin-top: 1.8mm;
+                        margin-top: 2.2mm;
                         font-size: 12pt;
                         text-align: center;
                         font-style: italic;
+                        min-height: 12mm;
                     }}
                     .total-row td {{
                         font-weight: bold;
@@ -890,80 +928,84 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                 </style>
             </head>
             <body>
-                <div class="sheet">
-                    <div class="header">{header_html}</div>
+                <div class="page-wrap">
+                    <div class="sheet">
+                        <div class="header">{header_html}</div>
 
-                    <div class="title">{title_text}</div>
+                        <div class="title">{title_text}</div>
 
-                    <table class="meta-table">
-                        <tr>
-                            <td class="meta-left">Ngày {created_at.day:02d} tháng {created_at.month:02d} năm {created_at.year}</td>
-                        </tr>
-                        <tr class="meta-invoice-row">
-                            <td class="meta-left"><strong>{escape(reference_label)}:</strong> {escape(reference_value)}</td>
-                        </tr>
-                    </table>
-
-                    <table class="info-table">
-                        <tr>
-                            <td class="info-left"><strong>Khách hàng:</strong> {escape(str(invoice.get('customer_name', '')))}</td>
-                            <td class="info-right"><strong>Điện thoại:</strong> {escape(str(invoice.get('phone', '')))}</td>
-                        </tr>
-                        <tr>
-                            <td class="info-left"><strong>Gmail:</strong> {escape(str(invoice.get('email', '')))}</td>
-                            <td class="info-right"><strong>Mã số thuế:</strong> {escape(str(invoice.get('tax_code', '')))}</td>
-                        </tr>
-                        <tr>
-                            <td class="info-address" colspan="2"><strong>Địa chỉ:</strong> {escape(str(invoice.get('address', '')))}</td>
-                        </tr>
-                    </table>
-
-                    <table class="items-table">
-                        <thead>
+                        <table class="meta-table">
                             <tr>
-                                <th class="col-stt">TT</th>
-                                <th class="col-code">Mã hàng</th>
-                                <th class="col-name">Tên sản phẩm</th>
-                                <th class="col-unit">ĐV</th>
-                                <th class="col-qty">SL</th>
-                                <th class="col-price">Đơn giá</th>
-                                <th class="col-total">Thành tiền</th>
+                                <td class="meta-left">Ngày {created_at.day:02d} tháng {created_at.month:02d} năm {created_at.year}</td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {item_rows}
-                            <tr class="total-row">
-                                <td class="total-label" colspan="3">Tổng thanh toán</td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td>{format_money(total_amount)}</td>
+                            <tr class="meta-invoice-row">
+                                <td class="meta-left"><strong>{escape(reference_label)}:</strong> {escape(reference_value)}</td>
                             </tr>
-                        </tbody>
-                    </table>
+                        </table>
 
-                    <div class="money-words"><strong>Số tiền viết bằng chữ:</strong> {escape(money_to_vietnamese(total_amount))}</div>
+                        <table class="info-table">
+                            <tr>
+                                <td class="info-left"><strong>Khách hàng:</strong> {escape(str(invoice.get('customer_name', '')))}</td>
+                                <td class="info-right"><strong>Điện thoại:</strong> {escape(str(invoice.get('phone', '')))}</td>
+                            </tr>
+                            <tr>
+                                <td class="info-left"><strong>Gmail:</strong> {escape(str(invoice.get('email', '')))}</td>
+                                <td class="info-right"><strong>Mã số thuế:</strong> {escape(str(invoice.get('tax_code', '')))}</td>
+                            </tr>
+                            <tr>
+                                <td class="info-address" colspan="2"><strong>Địa chỉ:</strong> {escape(str(invoice.get('address', '')))}</td>
+                            </tr>
+                        </table>
 
-                    <table class="signatures">
-                        <tr>
-                            <td>
-                                <div class="sign-label">Khách hàng</div>
-                                <div class="sign-note">(Ký, họ tên)</div>
-                            </td>
-                            <td>
-                                <div class="sign-label">Người lập phiếu</div>
-                                <div class="sign-note">(Ký, họ tên)</div>
-                            </td>
-                            <td>
-                                <div class="sign-label">Thủ kho</div>
-                                <div class="sign-note">(Ký, họ tên)</div>
-                            </td>
-                            <td>
-                                <div class="sign-label">Giám đốc</div>
-                                <div class="sign-note">(Ký, họ tên, đóng dấu)</div>
-                            </td>
-                        </tr>
-                    </table>
+                        {quotation_summary_html}
+
+                        <table class="items-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-stt">TT</th>
+                                    <th class="col-code">Mã hàng</th>
+                                    <th class="col-name">Tên sản phẩm</th>
+                                    <th class="col-unit">ĐV</th>
+                                    <th class="col-qty">SL</th>
+                                    <th class="col-price">Đơn giá</th>
+                                    <th class="col-total">Thành tiền</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {item_rows}
+                                <tr class="total-row">
+                                    <td class="total-label" colspan="3">Tổng thanh toán</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td>{format_money(total_amount)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="money-words"><strong>Số tiền viết bằng chữ:</strong> {escape(money_to_vietnamese(total_amount))}</div>
+
+                        <table class="signatures">
+                            <tr>
+                                <td>
+                                    <div class="sign-label">Khách hàng</div>
+                                    <div class="sign-note">(Ký, họ tên)</div>
+                                </td>
+                                <td>
+                                    <div class="sign-label">Người lập phiếu</div>
+                                    <div class="sign-note">(Ký, họ tên)</div>
+                                </td>
+                                <td>
+                                    <div class="sign-label">Thủ kho</div>
+                                    <div class="sign-note">(Ký, họ tên)</div>
+                                </td>
+                                <td>
+                                    <div class="sign-label">Giám đốc</div>
+                                    <div class="sign-note">(Ký, họ tên, đóng dấu)</div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
             </body>
         </html>
