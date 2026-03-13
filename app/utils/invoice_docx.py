@@ -1069,6 +1069,14 @@ def _find_libreoffice_binary() -> str:
     raise FileNotFoundError("Không tìm thấy LibreOffice để tạo bản xem trước PDF")
 
 
+def has_pdf_preview_support() -> bool:
+    try:
+        _find_libreoffice_binary()
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def convert_docx_to_pdf(docx_path: Path, output_dir: Path | None = None) -> Path:
     if not docx_path.exists():
         raise FileNotFoundError(f"Không tìm thấy file Word để chuyển PDF: {docx_path}")

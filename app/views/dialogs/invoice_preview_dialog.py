@@ -17,7 +17,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from app.utils.invoice_docx import DOCUMENT_VARIANTS, build_invoice_preview_pdf
+from app.utils.invoice_docx import (
+    DOCUMENT_VARIANTS,
+    build_invoice_preview_pdf,
+    has_pdf_preview_support,
+)
 
 
 class InvoicePreviewDialog(QDialog):
@@ -44,43 +48,76 @@ class InvoicePreviewDialog(QDialog):
         self._document_title = self.windowTitle()
         self._document_name = self._build_document_name(invoice, document_kind)
         self._preview_dir = TemporaryDirectory(prefix="invoice-preview-")
-        self._preview_pdf_path = self._build_preview_pdf(invoice, items)
-        self._pdf_document = QPdfDocument(self)
+        self._preview_pdf_path: Path | None = None
+        self._pdf_document: QPdfDocument | None = None
+        self.preview: QPdfView | None = None
+        self._preview_unavailable_reason: str | None = None
 
-        load_error = self._pdf_document.load(str(self._preview_pdf_path))
-        if load_error != QPdfDocument.Error.None_:
-            raise ValueError("Không thể mở bản xem trước PDF")
+        if has_pdf_preview_support():
+            self._preview_pdf_path = self._build_preview_pdf(invoice, items)
+            self._pdf_document = QPdfDocument(self)
+
+            load_error = self._pdf_document.load(str(self._preview_pdf_path))
+            if load_error != QPdfDocument.Error.None_:
+                raise ValueError("Không thể mở bản xem trước PDF")
+        else:
+            self._preview_unavailable_reason = "Không tìm thấy LibreOffice để tạo bản xem trước PDF"
 
         root = QVBoxLayout(self)
         hint = QLabel(hint_text or str(variant["hint"]))
         hint.setStyleSheet("color: #475569; font-style: italic;")
+        hint.setWordWrap(True)
         root.addWidget(hint)
 
-        self.preview = QPdfView(self)
-        self.preview.setDocument(self._pdf_document)
-        self.preview.setPageMode(QPdfView.PageMode.MultiPage)
-        self.preview.setZoomMode(QPdfView.ZoomMode.FitToWidth)
-        self.preview.setStyleSheet("QPdfView { background: #E5E7EB; border: none; }")
-        root.addWidget(self.preview, 1)
+        if self._pdf_document is not None:
+            self.preview = QPdfView(self)
+            self.preview.setDocument(self._pdf_document)
+            self.preview.setPageMode(QPdfView.PageMode.MultiPage)
+            self.preview.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+            self.preview.setStyleSheet("QPdfView { background: #E5E7EB; border: none; }")
+            root.addWidget(self.preview, 1)
+        else:
+            unavailable_label = QLabel(
+                "Không thể hiển thị bản xem trước PDF trên máy này. "
+                "Bạn vẫn có thể tiếp tục để xuất file Word."
+            )
+            unavailable_label.setWordWrap(True)
+            unavailable_label.setAlignment(Qt.AlignCenter)
+            unavailable_label.setStyleSheet(
+                "background: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; "
+                "border-radius: 12px; padding: 24px; font-weight: 600;"
+            )
+            root.addWidget(unavailable_label, 1)
+
+            if self._preview_unavailable_reason:
+                detail_label = QLabel(self._preview_unavailable_reason)
+                detail_label.setWordWrap(True)
+                detail_label.setAlignment(Qt.AlignCenter)
+                detail_label.setStyleSheet("color: #78716C;")
+                root.addWidget(detail_label)
 
         actions = QHBoxLayout()
 
         self.zoom_out_btn = QPushButton("Thu nhỏ")
         self.zoom_out_btn.clicked.connect(self._zoom_out)
+        self.zoom_out_btn.setEnabled(self.preview is not None)
         actions.addWidget(self.zoom_out_btn)
 
         self.fit_width_btn = QPushButton("Vừa chiều rộng")
         self.fit_width_btn.clicked.connect(self._fit_width)
+        self.fit_width_btn.setEnabled(self.preview is not None)
         actions.addWidget(self.fit_width_btn)
 
         self.zoom_in_btn = QPushButton("Phóng to")
         self.zoom_in_btn.clicked.connect(self._zoom_in)
+        self.zoom_in_btn.setEnabled(self.preview is not None)
         actions.addWidget(self.zoom_in_btn)
 
         actions.addStretch()
 
         self.print_btn = QPushButton("In")
         self.print_btn.clicked.connect(self._print_preview)
+        self.print_btn.setEnabled(self._pdf_document is not None)
         actions.addWidget(self.print_btn)
 
         self.close_btn = QPushButton("Đóng")
@@ -107,6 +144,14 @@ class InvoicePreviewDialog(QDialog):
         self.accept()
 
     def _print_preview(self) -> None:
+        if self._pdf_document is None:
+            QMessageBox.information(
+                self,
+                "Không có bản xem trước",
+                self._preview_unavailable_reason or "Không có dữ liệu PDF để in.",
+            )
+            return
+
         printer = QPrinter(QPrinter.HighResolution)
         printer.setPageSize(QPageSize(QPageSize.A4))
         printer.setPageOrientation(QPageLayout.Portrait)
@@ -140,18 +185,24 @@ class InvoicePreviewDialog(QDialog):
             painter.end()
 
     def _zoom_in(self) -> None:
+        if self.preview is None:
+            return
         if self.preview.zoomMode() != QPdfView.ZoomMode.Custom:
             self.preview.setZoomMode(QPdfView.ZoomMode.Custom)
             self.preview.setZoomFactor(1.0)
         self.preview.setZoomFactor(self.preview.zoomFactor() * 1.15)
 
     def _zoom_out(self) -> None:
+        if self.preview is None:
+            return
         if self.preview.zoomMode() != QPdfView.ZoomMode.Custom:
             self.preview.setZoomMode(QPdfView.ZoomMode.Custom)
             self.preview.setZoomFactor(1.0)
         self.preview.setZoomFactor(max(0.2, self.preview.zoomFactor() / 1.15))
 
     def _fit_width(self) -> None:
+        if self.preview is None:
+            return
         self.preview.setZoomMode(QPdfView.ZoomMode.FitToWidth)
 
     def _build_preview_pdf(self, invoice: dict, items: list[dict]) -> Path:
