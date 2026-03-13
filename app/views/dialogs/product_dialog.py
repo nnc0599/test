@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.utils.time_utils import now_iso_utc7
+from app.views.dialogs import disable_minimize_button
 
 
 class ProductFormDialog(QDialog):
@@ -31,6 +32,7 @@ class ProductFormDialog(QDialog):
         template_exporter=None,
     ):
         super().__init__(parent)
+        disable_minimize_button(self)
         self.mode = mode
         self.initial = initial or {}
         self.import_loader = import_loader

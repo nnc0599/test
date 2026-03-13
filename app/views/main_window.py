@@ -868,10 +868,14 @@ class MainWindow(QMainWindow):
                 self.invoice_export_dir,
                 output_name=build_invoice_output_name(invoice_no, detail["invoice"].get("customer_name", "")),
             )
+            open_error = self._open_exported_document(export_path)
+            message = f"Đã xuất file Word cho hóa đơn {invoice_no}\nFile Word: {export_path}"
+            if open_error:
+                message = f"{message}\n\n{open_error}"
             QMessageBox.information(
                 self,
                 "Thành công",
-                f"Đã xuất file Word cho hóa đơn {invoice_no}\nFile Word: {export_path}",
+                message,
             )
         except Exception as exc:  # pragma: no cover - dialog feedback
             QMessageBox.critical(self, "Lỗi", str(exc))
@@ -1842,10 +1846,14 @@ class MainWindow(QMainWindow):
                 document_kind="invoice",
                 output_name=build_invoice_output_name(invoice_no, detail["invoice"].get("customer_name", "")),
             )
+            open_error = self._open_exported_document(export_path)
+            message = f"Đã xuất lại file Word cho hóa đơn {invoice_no}\nFile Word: {export_path}"
+            if open_error:
+                message = f"{message}\n\n{open_error}"
             QMessageBox.information(
                 self,
                 "Thành công",
-                f"Đã xuất lại file Word cho hóa đơn {invoice_no}\nFile Word: {export_path}",
+                message,
             )
         except Exception as exc:  # pragma: no cover - dialog feedback
             QMessageBox.critical(self, "Lỗi", str(exc))

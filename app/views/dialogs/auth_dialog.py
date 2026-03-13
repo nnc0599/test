@@ -9,11 +9,13 @@ from PySide6.QtWidgets import (
 )
 
 from app.config import DEFAULT_ADMIN_PASSWORD
+from app.views.dialogs import disable_minimize_button
 
 
 class PasswordDialog(QDialog):
     def __init__(self, parent=None, title: str = "Xác thực"):
         super().__init__(parent)
+        disable_minimize_button(self)
         self.setWindowTitle(title)
         self.setModal(True)
         self.setMinimumWidth(420)

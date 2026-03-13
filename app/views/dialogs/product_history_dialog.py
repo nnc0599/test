@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.views.dialogs import disable_minimize_button
+
 
 def format_money(value: int) -> str:
     return f"{int(value):,}".replace(",", ".")
@@ -23,6 +25,7 @@ LIST_ROW_HEIGHT_PX = 35
 class ProductHistoryDialog(QDialog):
     def __init__(self, product: dict, history_rows: list[dict], parent=None):
         super().__init__(parent)
+        disable_minimize_button(self)
         self.setModal(True)
         self.resize(1100, 720)
         self.setWindowTitle(f"Lịch sử chỉnh sửa - {product.get('product_code', '')}")

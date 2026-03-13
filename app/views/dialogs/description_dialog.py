@@ -1,9 +1,12 @@
 from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QTextEdit, QVBoxLayout
 
+from app.views.dialogs import disable_minimize_button
+
 
 class DescriptionDialog(QDialog):
     def __init__(self, product_code: str, product_name: str, description: str, parent=None):
         super().__init__(parent)
+        disable_minimize_button(self)
         self.setWindowTitle("Mô tả sản phẩm")
         self.setModal(True)
         self.resize(640, 420)

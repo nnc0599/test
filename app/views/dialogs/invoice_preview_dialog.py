@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.utils.invoice_docx import DOCUMENT_VARIANTS, build_invoice_preview_html
+from app.views.dialogs import disable_minimize_button
 
 
 class InvoicePreviewDialog(QDialog):
@@ -25,6 +26,7 @@ class InvoicePreviewDialog(QDialog):
         hint_text: str | None = None,
     ):
         super().__init__(parent)
+        disable_minimize_button(self)
         variant = DOCUMENT_VARIANTS.get(document_kind, DOCUMENT_VARIANTS["invoice"])
         self.setWindowTitle(window_title or str(variant["window_title"]))
         self.setModal(True)

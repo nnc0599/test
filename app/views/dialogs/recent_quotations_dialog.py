@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.views.dialogs import disable_minimize_button
+
 
 def format_money(value: int) -> str:
     return f"{int(value):,}".replace(",", ".")
@@ -31,6 +33,7 @@ class RecentQuotationsDialog(QDialog):
         parent=None,
     ):
         super().__init__(parent)
+        disable_minimize_button(self)
         self.setWindowTitle("Các bản báo giá gần đây")
         self.setModal(True)
         self.resize(980, 620)
