@@ -299,17 +299,20 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(6, QHeaderView.Fixed)
         layout.addWidget(self.order_table)
 
-        payment_box = QGroupBox("Tổng tiền hóa đơn")
-        payment_layout = QVBoxLayout(payment_box)
-        payment_layout.setContentsMargins(10, 10, 10, 10)
-        payment_layout.setSpacing(8)
+        self.payment_box = QGroupBox("Tổng tiền hóa đơn")
+        self.payment_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        payment_layout = QVBoxLayout(self.payment_box)
+        payment_layout.setContentsMargins(6, 4, 6, 4)
+        payment_layout.setSpacing(2)
 
         self.total_all_text_label = QLabel("Tổng số tiền")
         self.total_all_label = QLabel("0")
+        self.total_all_text_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.total_all_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         total_row = QHBoxLayout()
         total_row.setContentsMargins(0, 0, 0, 0)
-        total_row.setSpacing(8)
+        total_row.setSpacing(4)
         total_row.addWidget(self.total_all_text_label)
         total_row.addWidget(self.total_all_label)
         total_row.addStretch(1)
@@ -318,17 +321,22 @@ class MainWindow(QMainWindow):
 
         self._apply_payment_summary_fonts()
 
-        layout.addWidget(payment_box)
+        layout.addWidget(self.payment_box)
 
-        export_location_box = QGroupBox("Nơi lưu file hóa đơn / báo giá")
-        export_location_layout = QHBoxLayout(export_location_box)
+        self.export_location_box = QGroupBox("Nơi lưu file hóa đơn / báo giá")
+        self.export_location_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        export_location_layout = QHBoxLayout(self.export_location_box)
+        export_location_layout.setContentsMargins(6, 4, 6, 4)
+        export_location_layout.setSpacing(6)
         self.export_dir_label = QLabel(str(self.invoice_export_dir))
         self.export_dir_label.setWordWrap(True)
+        self.export_dir_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.choose_export_dir_btn = QPushButton("Chọn nơi lưu file")
+        self.choose_export_dir_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.choose_export_dir_btn.clicked.connect(self._choose_invoice_export_dir)
         export_location_layout.addWidget(self.export_dir_label, 1)
         export_location_layout.addWidget(self.choose_export_dir_btn)
-        layout.addWidget(export_location_box)
+        layout.addWidget(self.export_location_box)
 
         action_row = QHBoxLayout()
         action_row.setSpacing(10)
@@ -1858,13 +1866,34 @@ class MainWindow(QMainWindow):
         self.order_table.setColumnWidth(6, 88)
 
     def _apply_payment_summary_fonts(self) -> None:
-        bottom_row_font = QFont("Times New Roman")
-        bottom_row_font.setPixelSize(14)
-        bottom_row_font.setBold(True)
+        app = QApplication.instance()
+        base_font = app.font() if app is not None else QFont("Times New Roman")
+        base_px = base_font.pixelSize() if base_font.pixelSize() > 0 else 14
 
-        for widget in [getattr(self, "total_all_text_label", None), getattr(self, "total_all_label", None)]:
-            if widget is not None:
-                widget.setFont(bottom_row_font)
+        group_font = QFont(base_font)
+        group_font.setPixelSize(base_px + 2)
+        group_font.setBold(True)
+        if getattr(self, "payment_box", None) is not None:
+            self.payment_box.setFont(group_font)
+
+        label_font = QFont(base_font)
+        label_font.setPixelSize(base_px + 2)
+        label_font.setBold(True)
+
+        amount_font = QFont(base_font)
+        amount_font.setPixelSize(base_px + 4)
+        amount_font.setBold(True)
+
+        if getattr(self, "total_all_text_label", None) is not None:
+            self.total_all_text_label.setFont(label_font)
+        if getattr(self, "total_all_label", None) is not None:
+            self.total_all_label.setFont(amount_font)
+
+        export_box_font = QFont(base_font)
+        export_box_font.setPixelSize(base_px + 1)
+        export_box_font.setBold(True)
+        if getattr(self, "export_location_box", None) is not None:
+            self.export_location_box.setFont(export_box_font)
 
     def _sync_font_by_window_size(self) -> None:
         width_factor = self.width() / 72
