@@ -6,9 +6,6 @@ from datetime import datetime
 from functools import lru_cache
 from html import escape
 from pathlib import Path
-import shutil
-import subprocess
-import tempfile
 from zipfile import ZipFile
 
 from docx import Document
@@ -32,14 +29,14 @@ DOCUMENT_VARIANTS = {
     "invoice": {
         "title": "PHIẾU XUẤT KHO KIÊM BẢO HÀNH",
         "confirm_text": "Xuất file Word",
-        "window_title": "Xem trước hóa đơn A4",
-        "hint": "Xem trước bố cục in trên khổ giấy A4 trước khi xuất file Word",
+        "window_title": "Xem thông tin hóa đơn",
+        "hint": "Kiểm tra lại thông tin hóa đơn trước khi xuất file Word",
     },
     "quotation": {
         "title": "BÁO GIÁ VẬT TƯ",
         "confirm_text": "Lưu bản báo giá",
-        "window_title": "Xem trước bản báo giá A4",
-        "hint": "Xem trước bản báo giá trên khổ giấy A4 trước khi lưu file Word",
+        "window_title": "Xem thông tin bản báo giá",
+        "hint": "Kiểm tra lại thông tin bản báo giá trước khi lưu file Word",
     },
 }
 
@@ -1059,84 +1056,3 @@ def export_invoice_docx(
     doc.save(str(output_path))
     return output_path
 
-
-@lru_cache(maxsize=1)
-def _find_libreoffice_binary() -> str:
-    for command in ("libreoffice", "soffice", "lowriter"):
-        resolved = shutil.which(command)
-        if resolved:
-            return resolved
-    raise FileNotFoundError("Không tìm thấy LibreOffice để tạo bản xem trước PDF")
-
-
-def has_pdf_preview_support() -> bool:
-    try:
-        _find_libreoffice_binary()
-    except FileNotFoundError:
-        return False
-    return True
-
-
-def convert_docx_to_pdf(docx_path: Path, output_dir: Path | None = None) -> Path:
-    if not docx_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy file Word để chuyển PDF: {docx_path}")
-
-    target_dir = output_dir or docx_path.parent
-    target_dir.mkdir(parents=True, exist_ok=True)
-    libreoffice_bin = _find_libreoffice_binary()
-
-    with tempfile.TemporaryDirectory(prefix="libreoffice-profile-") as profile_dir:
-        command = [
-            libreoffice_bin,
-            "--headless",
-            "--nologo",
-            "--nolockcheck",
-            "--nodefault",
-            "--norestore",
-            f"-env:UserInstallation={Path(profile_dir).as_uri()}",
-            "--convert-to",
-            "pdf:writer_pdf_Export",
-            "--outdir",
-            str(target_dir),
-            str(docx_path),
-        ]
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-
-    pdf_path = target_dir / f"{docx_path.stem}.pdf"
-    if result.returncode != 0 or not pdf_path.exists():
-        details = "\n".join(
-            part.strip() for part in [result.stdout, result.stderr] if part and part.strip()
-        )
-        message = "Không thể tạo bản xem trước PDF từ file Word"
-        if details:
-            message = f"{message}: {details}"
-        raise RuntimeError(message)
-
-    return pdf_path
-
-
-def build_invoice_preview_pdf(
-    invoice: dict,
-    items: list[dict],
-    output_dir: Path,
-    document_kind: str = "invoice",
-    output_name: str | None = None,
-) -> Path:
-    resolved_output_name = (output_name or "preview.docx").strip()
-    if not resolved_output_name.lower().endswith(".docx"):
-        resolved_output_name = f"{resolved_output_name}.docx"
-
-    docx_path = export_invoice_docx(
-        invoice,
-        items,
-        output_dir=output_dir,
-        document_kind=document_kind,
-        output_name=resolved_output_name,
-    )
-    return convert_docx_to_pdf(docx_path, output_dir=output_dir)
