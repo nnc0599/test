@@ -16,6 +16,7 @@ from docx.oxml.ns import qn
 from docx.shared import Cm
 from docx.shared import Pt
 
+from app.utils.item_sort import sort_items_by_unit_price_desc
 from app.utils.time_utils import now_utc7
 
 
@@ -706,6 +707,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
     created_at = _parse_created_at(str(invoice.get("created_at", "")))
     variant = _document_variant(document_kind)
     assets = _load_template_preview_assets()
+    sorted_items = sort_items_by_unit_price_desc(items)
     page_margin_mm = assets["page_margin_mm"]
     item_widths = assets["item_widths"]
     reference_label = "Báo giá" if document_kind == "quotation" else "Số"
@@ -730,7 +732,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
             <td class=\"col-total\">{format_money(int(item.get('line_total', 0)))}</td>
         </tr>
         """
-        for index, item in enumerate(items, start=1)
+        for index, item in enumerate(sorted_items, start=1)
     )
 
     total_amount = int(invoice.get("total_amount", 0))
@@ -980,6 +982,7 @@ def export_invoice_docx(
         raise FileNotFoundError(f"Không tìm thấy mẫu hóa đơn: {TEMPLATE_PATH}")
     if not items:
         raise ValueError("Không có sản phẩm để xuất file hóa đơn")
+    sorted_items = sort_items_by_unit_price_desc(items)
 
     doc = Document(str(TEMPLATE_PATH))
     created_at = _parse_created_at(str(invoice.get("created_at", "")))
@@ -1039,13 +1042,13 @@ def export_invoice_docx(
 
     template_tr = deepcopy(items_table.rows[1]._tr)
     total_tr = items_table.rows[2]._tr
-    for _ in range(len(items) - 1):
+    for _ in range(len(sorted_items) - 1):
         items_table._tbl.insert(items_table._tbl.index(total_tr), deepcopy(template_tr))
 
-    for index, item in enumerate(items, start=1):
+    for index, item in enumerate(sorted_items, start=1):
         _populate_item_row(items_table.rows[index], index, item)
 
-    total_row = items_table.rows[len(items) + 1]
+    total_row = items_table.rows[len(sorted_items) + 1]
     _set_cell_text(total_row.cells[0], "Tổng thanh toán", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
     _set_cell_text(total_row.cells[6], format_money(int(invoice.get("total_amount", 0))), alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
 

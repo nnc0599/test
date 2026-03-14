@@ -40,6 +40,7 @@ from app.controllers.report_controller import ReportController
 from app.utils.invoice_docx import EXPORT_DIR
 from app.utils.time_utils import now_iso_utc7
 from app.utils.invoice_docx import build_invoice_output_name, build_quotation_output_name, export_invoice_docx, export_report_docx
+from app.utils.item_sort import sort_items_by_unit_price_desc
 from app.views.dialogs.auth_dialog import PasswordDialog
 from app.views.dialogs.description_dialog import DescriptionDialog
 from app.views.dialogs.invoice_detail_dialog import InvoiceDetailDialog
@@ -78,6 +79,9 @@ class MainWindow(QMainWindow):
         self._suspend_product_search = False
         self._suspend_customer_search = False
         self._selected_product_stock = 0
+        self._products_loaded = False
+        self._report_loaded = False
+        self._suspend_report_refresh = True
         self._settings = QSettings("nnc0599", "PhanMemBanHang")
         self.invoice_export_dir = self._load_invoice_export_dir()
 
@@ -93,9 +97,7 @@ class MainWindow(QMainWindow):
             app.installEventFilter(self)
         self._bind_runtime_clock()
         self._sync_font_by_window_size()
-
-        self.refresh_products()
-        self.refresh_report()
+        self._suspend_report_refresh = False
         self._update_invoice_totals()
 
     def _apply_base_style(self) -> None:
@@ -839,11 +841,15 @@ class MainWindow(QMainWindow):
     def _on_revenue_period_changed(self) -> None:
         period_type = str(self.revenue_period_type_combo.currentData() or "day")
         self._apply_period_editor_format(self.revenue_period_edit, period_type)
+        if self._suspend_report_refresh:
+            return
         self.refresh_report()
 
     def _on_goods_period_changed(self) -> None:
         period_type = str(self.goods_period_type_combo.currentData() or "day")
         self._apply_period_editor_format(self.goods_period_edit, period_type)
+        if self._suspend_report_refresh:
+            return
         self.refresh_report()
 
     def _sync_goods_report_mode(self) -> None:
@@ -864,6 +870,8 @@ class MainWindow(QMainWindow):
         period_type = str(self.invoice_filter_type_combo.currentData() or "all")
         self._apply_period_editor_format(self.invoice_filter_date_edit, period_type)
         self.invoice_filter_date_edit.setEnabled(period_type != "all")
+        if self._suspend_report_refresh:
+            return
         self._refresh_invoice_search_results()
 
     def _refresh_invoice_search_results(self, keyword: str | None = None) -> None:
@@ -944,6 +952,8 @@ class MainWindow(QMainWindow):
 
     def _on_goods_report_mode_changed(self) -> None:
         self._sync_goods_report_mode()
+        if self._suspend_report_refresh:
+            return
         self.refresh_report()
 
     def _export_revenue_report(self) -> None:
@@ -1056,7 +1066,18 @@ class MainWindow(QMainWindow):
                 )
             else:
                 btn.setStyleSheet("")
+        self._load_tab_data_if_needed(idx)
         self._animate_page(self.stack.currentWidget())
+
+    def _load_tab_data_if_needed(self, idx: int) -> None:
+        if idx == 1 and not self._products_loaded:
+            self.refresh_products()
+            self._products_loaded = True
+            return
+
+        if idx == 2 and not self._report_loaded:
+            self.refresh_report()
+            self._report_loaded = True
 
     def _animate_page(self, widget: QWidget) -> None:
         effect = QGraphicsOpacityEffect(widget)
@@ -1228,11 +1249,13 @@ class MainWindow(QMainWindow):
             "line_total": qty * unit_price,
         }
         self.invoice_lines.append(line)
+        self.invoice_lines = sort_items_by_unit_price_desc(self.invoice_lines)
         self._render_invoice_lines()
         self._update_invoice_totals()
         self._reset_add_item_inputs()
 
     def _render_invoice_lines(self) -> None:
+        self.invoice_lines = sort_items_by_unit_price_desc(self.invoice_lines)
         self.order_table.setRowCount(len(self.invoice_lines))
         for idx, line in enumerate(self.invoice_lines, 1):
             values = [
@@ -1292,7 +1315,7 @@ class MainWindow(QMainWindow):
 
         created_at = self.order_created_at.text().strip() or now_iso_utc7()
         total_goods, ship_fee, total_all = self._calculate_invoice_totals()
-        export_lines = [dict(line) for line in self.invoice_lines]
+        export_lines = sort_items_by_unit_price_desc([dict(line) for line in self.invoice_lines])
         document_data = {
             "invoice_no": invoice_no,
             "created_at": created_at,
@@ -1471,7 +1494,7 @@ class MainWindow(QMainWindow):
 
         self.customer_suggestion_list.clear()
         self.customer_suggestion_list.hide()
-        self.invoice_lines = [
+        self.invoice_lines = sort_items_by_unit_price_desc([
             {
                 "product_code": str(item.get("product_code", "") or ""),
                 "product_name": str(item.get("product_name", "") or ""),
@@ -1481,7 +1504,7 @@ class MainWindow(QMainWindow):
                 "line_total": int(item.get("line_total", 0) or 0),
             }
             for item in items
-        ]
+        ])
         self._render_invoice_lines()
         self._update_invoice_totals()
         self._reset_add_item_inputs()
@@ -1629,6 +1652,7 @@ class MainWindow(QMainWindow):
     def refresh_products(self) -> None:
         products = self.product_controller.list_products()
         self.product_map = {item["product_code"]: item for item in products}
+        self._products_loaded = True
 
         self.product_table.setRowCount(len(products))
         for row, product in enumerate(products):
@@ -1765,6 +1789,9 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_report(self) -> None:
+        if self._suspend_report_refresh:
+            return
+
         revenue_period_type, revenue_period_value = self._selected_period(
             self.revenue_period_type_combo,
             self.revenue_period_edit,
@@ -1831,6 +1858,7 @@ class MainWindow(QMainWindow):
             )
 
         self._refresh_invoice_search_results(self.invoice_search_edit.text())
+        self._report_loaded = True
 
     def _selected_invoice_no(self) -> str | None:
         if getattr(self, "invoice_table", None) is None:

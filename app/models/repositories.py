@@ -1,11 +1,38 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timedelta
 from typing import Iterable
 import re
 
 from app.database.connection import get_connection
 from app.utils.time_utils import now_iso_utc7, today_utc7
+
+
+def _period_bounds(period_type: str, period_value: str) -> tuple[str, str]:
+    normalized_type = period_type.strip().lower()
+    normalized_value = period_value.strip()
+
+    if normalized_type == "day":
+        start = datetime.strptime(normalized_value[:10], "%Y-%m-%d")
+        end = start + timedelta(days=1)
+        return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+
+    if normalized_type == "month":
+        start = datetime.strptime(f"{normalized_value[:7]}-01", "%Y-%m-%d")
+        if start.month == 12:
+            end = start.replace(year=start.year + 1, month=1)
+        else:
+            end = start.replace(month=start.month + 1)
+        return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+
+    if normalized_type == "year":
+        year = int(normalized_value[:4])
+        start = datetime(year, 1, 1)
+        end = datetime(year + 1, 1, 1)
+        return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+
+    raise ValueError("Kiểu kỳ báo cáo không hợp lệ")
 
 
 class ProductRepository:
@@ -184,17 +211,51 @@ class ProductRepository:
             conn.execute("DELETE FROM products WHERE product_code = ?", (product_code,))
 
     def search_products(self, keyword: str) -> list[dict]:
-        like_kw = f"%{keyword.strip()}%"
+        normalized_keyword = keyword.strip()
+        if not normalized_keyword:
+            return []
+
+        exact_kw = normalized_keyword
+        prefix_kw = f"{normalized_keyword}%"
+        contains_kw = f"%{normalized_keyword}%"
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT product_code, name, unit, quantity, sale_price, updated_at, description, note
+                SELECT
+                    product_code,
+                    name,
+                    unit,
+                    quantity,
+                    sale_price,
+                    updated_at,
+                    description,
+                    note
                 FROM products
-                WHERE product_code LIKE ? OR name LIKE ? OR description LIKE ?
-                ORDER BY name ASC
+                WHERE product_code = ?
+                   OR product_code LIKE ?
+                   OR name LIKE ?
+                   OR description LIKE ?
+                ORDER BY
+                    CASE
+                        WHEN product_code = ? THEN 0
+                        WHEN product_code LIKE ? THEN 1
+                        WHEN name LIKE ? THEN 2
+                        ELSE 3
+                    END,
+                    name COLLATE NOCASE ASC,
+                    updated_at DESC,
+                    product_code ASC
                 LIMIT 20
                 """,
-                (like_kw, like_kw, like_kw),
+                (
+                    exact_kw,
+                    prefix_kw,
+                    prefix_kw,
+                    contains_kw,
+                    exact_kw,
+                    prefix_kw,
+                    prefix_kw,
+                ),
             ).fetchall()
             return [dict(row) for row in rows]
 
@@ -562,7 +623,7 @@ class InvoiceRepository:
                     line_total
                 FROM quotation_items
                 WHERE quotation_id = ?
-                ORDER BY id ASC
+                ORDER BY unit_price DESC, line_total DESC, product_name COLLATE NOCASE ASC, id ASC
                 """,
                 (quotation_id,),
             ).fetchall()
@@ -610,7 +671,7 @@ class InvoiceRepository:
                     line_total
                 FROM quotation_items
                 WHERE quotation_id = ?
-                ORDER BY id ASC
+                ORDER BY unit_price DESC, line_total DESC, product_name COLLATE NOCASE ASC, id ASC
                 """,
                 (quotation_id,),
             ).fetchall()
@@ -687,12 +748,10 @@ class InvoiceRepository:
             params.extend([like_keyword, like_keyword, like_keyword])
 
         normalized_period_type = period_type.strip().lower()
-        if normalized_period_type == "day" and period_value:
-            clauses.append("substr(invoices.created_at, 1, 10) = ?")
-            params.append(period_value[:10])
-        elif normalized_period_type == "month" and period_value:
-            clauses.append("substr(invoices.created_at, 1, 7) = ?")
-            params.append(period_value[:7])
+        if normalized_period_type in {"day", "month"} and period_value:
+            start, end = _period_bounds(normalized_period_type, period_value)
+            clauses.append("invoices.created_at >= ? AND invoices.created_at < ?")
+            params.extend([start, end])
 
         where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
@@ -753,7 +812,7 @@ class InvoiceRepository:
                 FROM invoice_items
                 LEFT JOIN products ON products.product_code = invoice_items.product_code
                 WHERE invoice_items.invoice_no = ?
-                ORDER BY invoice_items.id ASC
+                ORDER BY invoice_items.unit_price DESC, invoice_items.line_total DESC, invoice_items.product_name COLLATE NOCASE ASC, invoice_items.id ASC
                 """,
                 (invoice_no,),
             ).fetchall()
@@ -779,51 +838,57 @@ class ReportRepository:
         normalized_value = period_value.strip()[:length]
         return length, normalized_value
 
+    @staticmethod
+    def _period_bounds(period_type: str, period_value: str) -> tuple[str, str]:
+        return _period_bounds(period_type, period_value)
+
     def revenue_today(self) -> int:
         day = today_utc7()
+        start, end = self._period_bounds("day", day)
         with get_connection() as conn:
             row = conn.execute(
                 """
                 SELECT COALESCE(SUM(total_amount), 0) AS total
                 FROM invoices
-                WHERE substr(created_at, 1, 10) = ?
+                WHERE created_at >= ? AND created_at < ?
                 """,
-                (day,),
+                (start, end),
             ).fetchone()
             return int(row["total"])
 
     def revenue_month(self) -> int:
         month = today_utc7()[:7]
+        start, end = self._period_bounds("month", month)
         with get_connection() as conn:
             row = conn.execute(
                 """
                 SELECT COALESCE(SUM(total_amount), 0) AS total
                 FROM invoices
-                WHERE substr(created_at, 1, 7) = ?
+                WHERE created_at >= ? AND created_at < ?
                 """,
-                (month,),
+                (start, end),
             ).fetchone()
             return int(row["total"])
 
     def revenue_by_period(self, period_type: str, period_value: str) -> list[dict]:
-        prefix_length, prefix_value = self._period_prefix(period_type, period_value)
+        start, end = self._period_bounds(period_type, period_value)
         with get_connection() as conn:
             rows = conn.execute(
-                f"""
+                """
                 SELECT invoice_no, created_at, customer_name, phone, total_amount
                 FROM invoices
-                WHERE substr(created_at, 1, {prefix_length}) = ?
+                WHERE created_at >= ? AND created_at < ?
                 ORDER BY created_at DESC, invoice_no DESC
                 """,
-                (prefix_value,),
+                (start, end),
             ).fetchall()
             return [dict(row) for row in rows]
 
     def sold_products_by_period(self, period_type: str, period_value: str) -> list[dict]:
-        prefix_length, prefix_value = self._period_prefix(period_type, period_value)
+        start, end = self._period_bounds(period_type, period_value)
         with get_connection() as conn:
             rows = conn.execute(
-                f"""
+                """
                 SELECT
                     invoice_items.product_code,
                     invoice_items.product_name,
@@ -832,11 +897,11 @@ class ReportRepository:
                     SUM(invoice_items.line_total) AS sold_amount
                 FROM invoice_items
                 INNER JOIN invoices ON invoices.invoice_no = invoice_items.invoice_no
-                WHERE substr(invoices.created_at, 1, {prefix_length}) = ?
+                WHERE invoices.created_at >= ? AND invoices.created_at < ?
                 GROUP BY invoice_items.product_code, invoice_items.product_name, COALESCE(invoice_items.unit, '')
                 ORDER BY sold_quantity DESC, sold_amount DESC, invoice_items.product_name ASC
                 """,
-                (prefix_value,),
+                (start, end),
             ).fetchall()
             return [dict(row) for row in rows]
 

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
 )
 
+from app.utils.item_sort import sort_items_by_unit_price_desc
 from app.views.dialogs import disable_minimize_button
 
 
@@ -32,7 +33,7 @@ class InvoiceDetailDialog(QDialog):
         self.resize(980, 720)
 
         invoice = detail["invoice"]
-        items = detail["items"]
+        items = sort_items_by_unit_price_desc(detail["items"])
 
         header_box = QGroupBox("Thông tin hóa đơn")
         header_form = QFormLayout(header_box)

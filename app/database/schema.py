@@ -102,6 +102,44 @@ CREATE TABLE IF NOT EXISTS product_update_history (
 """
 
 
+INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_invoices_created_at_invoice_no
+ON invoices(created_at DESC, invoice_no DESC);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_no
+ON invoice_items(invoice_no);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_no_price
+ON invoice_items(invoice_no, unit_price DESC, line_total DESC, product_name COLLATE NOCASE, id);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_items_product_code_invoice_no
+ON invoice_items(product_code, invoice_no);
+
+CREATE INDEX IF NOT EXISTS idx_quotation_items_quotation_id_price
+ON quotation_items(quotation_id, unit_price DESC, line_total DESC, product_name COLLATE NOCASE, id);
+
+CREATE INDEX IF NOT EXISTS idx_products_in_stock_name
+ON products(name COLLATE NOCASE, product_code)
+WHERE quantity > 0;
+
+CREATE INDEX IF NOT EXISTS idx_products_updated_at
+ON products(updated_at DESC, product_code);
+
+CREATE INDEX IF NOT EXISTS idx_products_name_code
+ON products(name COLLATE NOCASE, product_code);
+
+CREATE INDEX IF NOT EXISTS idx_product_update_history_product_changed_at
+ON product_update_history(product_code, changed_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_quotations_pending_recent
+ON quotations(created_at DESC, id DESC)
+WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_quotations_status_created_at
+ON quotations(status, created_at DESC, id DESC);
+"""
+
+
 REQUIRED_TABLE_COLUMNS = {
     "products": {
         "product_code": "TEXT",
@@ -250,6 +288,7 @@ def init_schema() -> None:
         conn.executescript(SCHEMA_SQL)
         _ensure_missing_columns(conn)
         _migrate_invoice_items_without_product_fk(conn)
+        conn.executescript(INDEX_SQL)
 
 
 def seed_sample_products() -> None:

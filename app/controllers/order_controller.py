@@ -1,4 +1,5 @@
 from app.models.repositories import CustomerRepository, InvoiceRepository, ProductRepository
+from app.utils.item_sort import sort_items_by_unit_price_desc
 from app.utils.time_utils import now_iso_utc7
 
 
@@ -38,13 +39,21 @@ class OrderController:
         return self.invoice_repo.search_invoices(keyword, period_type, period_value)
 
     def get_invoice_detail(self, invoice_no: str) -> dict | None:
-        return self.invoice_repo.get_invoice_detail(invoice_no)
+        detail = self.invoice_repo.get_invoice_detail(invoice_no)
+        if not detail:
+            return None
+        detail["items"] = sort_items_by_unit_price_desc(detail.get("items", []))
+        return detail
 
     def list_recent_quotations(self, limit: int = 50) -> list[dict]:
         return self.invoice_repo.list_recent_quotations(limit)
 
     def get_quotation_detail(self, quotation_id: int) -> dict | None:
-        return self.invoice_repo.get_quotation_detail(quotation_id)
+        detail = self.invoice_repo.get_quotation_detail(quotation_id)
+        if not detail:
+            return None
+        detail["items"] = sort_items_by_unit_price_desc(detail.get("items", []))
+        return detail
 
     def generate_invoice_no(self) -> str:
         return self.invoice_repo.generate_invoice_no()
@@ -71,7 +80,7 @@ class OrderController:
             "paid_amount": int(invoice_data.get("paid_amount", 0)),
             "payment_date": invoice_data.get("payment_date", created_at),
         }
-        self.invoice_repo.create_invoice(payload, lines)
+        self.invoice_repo.create_invoice(payload, sort_items_by_unit_price_desc(lines))
 
     def create_quotation(self, customer_data: dict, quotation_data: dict, lines: list[dict]) -> int:
         if not lines:
@@ -92,7 +101,7 @@ class OrderController:
             "total_amount": int(quotation_data["total_amount"]),
             "export_path": quotation_data.get("export_path", ""),
         }
-        return self.invoice_repo.create_quotation(payload, lines)
+        return self.invoice_repo.create_quotation(payload, sort_items_by_unit_price_desc(lines))
 
     def update_quotation(self, quotation_id: int, customer_data: dict, quotation_data: dict, lines: list[dict]) -> None:
         if not lines:
@@ -112,7 +121,7 @@ class OrderController:
             "ship_fee": int(quotation_data.get("ship_fee", 0)),
             "total_amount": int(quotation_data["total_amount"]),
         }
-        self.invoice_repo.update_quotation(quotation_id, payload, lines)
+        self.invoice_repo.update_quotation(quotation_id, payload, sort_items_by_unit_price_desc(lines))
 
     def update_quotation_export_path(self, quotation_id: int, export_path: str) -> None:
         self.invoice_repo.update_quotation_export_path(quotation_id, export_path)
@@ -121,7 +130,7 @@ class OrderController:
         self.invoice_repo.delete_quotation(quotation_id)
 
     def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str) -> None:
-        detail = self.invoice_repo.get_quotation_detail(quotation_id)
+        detail = self.get_quotation_detail(quotation_id)
         if not detail:
             raise ValueError("Không tìm thấy bản báo giá")
 
