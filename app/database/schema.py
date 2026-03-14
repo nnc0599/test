@@ -1,3 +1,5 @@
+import sqlite3
+
 from app.database.connection import get_connection
 from app.utils.time_utils import now_iso_utc7
 
@@ -137,6 +139,39 @@ WHERE status = 'pending';
 
 CREATE INDEX IF NOT EXISTS idx_quotations_status_created_at
 ON quotations(status, created_at DESC, id DESC);
+"""
+
+
+PRODUCTS_FTS_SQL = """
+CREATE VIRTUAL TABLE IF NOT EXISTS products_fts
+USING fts5(
+    product_code,
+    name,
+    description,
+    content='products',
+    content_rowid='rowid',
+    tokenize='unicode61 remove_diacritics 2'
+);
+"""
+
+
+PRODUCTS_FTS_TRIGGERS_SQL = """
+CREATE TRIGGER IF NOT EXISTS products_fts_ai AFTER INSERT ON products BEGIN
+    INSERT INTO products_fts(rowid, product_code, name, description)
+    VALUES (new.rowid, new.product_code, new.name, COALESCE(new.description, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS products_fts_ad AFTER DELETE ON products BEGIN
+    INSERT INTO products_fts(products_fts, rowid, product_code, name, description)
+    VALUES ('delete', old.rowid, old.product_code, old.name, COALESCE(old.description, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS products_fts_au AFTER UPDATE ON products BEGIN
+    INSERT INTO products_fts(products_fts, rowid, product_code, name, description)
+    VALUES ('delete', old.rowid, old.product_code, old.name, COALESCE(old.description, ''));
+    INSERT INTO products_fts(rowid, product_code, name, description)
+    VALUES (new.rowid, new.product_code, new.name, COALESCE(new.description, ''));
+END;
 """
 
 
@@ -283,12 +318,27 @@ def _migrate_invoice_items_without_product_fk(conn) -> None:
     conn.execute("DROP TABLE invoice_items_old")
 
 
+def _ensure_products_fts(conn) -> None:
+    try:
+        conn.execute(PRODUCTS_FTS_SQL)
+        conn.executescript(PRODUCTS_FTS_TRIGGERS_SQL)
+
+        product_count = int(conn.execute("SELECT COUNT(*) FROM products").fetchone()[0])
+        fts_count = int(conn.execute("SELECT COUNT(*) FROM products_fts").fetchone()[0])
+        if product_count != fts_count:
+            conn.execute("INSERT INTO products_fts(products_fts) VALUES ('rebuild')")
+    except sqlite3.OperationalError:
+        # Fallback an toàn nếu SQLite hiện tại không có FTS5.
+        pass
+
+
 def init_schema() -> None:
     with get_connection() as conn:
         conn.executescript(SCHEMA_SQL)
         _ensure_missing_columns(conn)
         _migrate_invoice_items_without_product_fk(conn)
         conn.executescript(INDEX_SQL)
+        _ensure_products_fts(conn)
 
 
 def seed_sample_products() -> None:

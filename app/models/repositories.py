@@ -35,7 +35,200 @@ def _period_bounds(period_type: str, period_value: str) -> tuple[str, str]:
     raise ValueError("Kiểu kỳ báo cáo không hợp lệ")
 
 
+def _prefix_bounds(value: str) -> tuple[str, str]:
+    normalized_value = value.strip()
+    return normalized_value, f"{normalized_value}\uffff"
+
+
+def _build_fts5_query(value: str) -> str:
+    tokens = [token for token in re.findall(r"\S+", value.strip()) if token]
+    if not tokens:
+        return ""
+
+    escaped_tokens = []
+    for token in tokens:
+        escaped_token = token.replace('"', '""')
+        escaped_tokens.append(f'"{escaped_token}"*')
+    return " AND ".join(escaped_tokens)
+
+
 class ProductRepository:
+    def _search_products_with_fts(
+        self,
+        conn,
+        normalized_keyword: str,
+        code_prefix_start: str,
+        code_prefix_end: str,
+        name_prefix_start: str,
+        name_prefix_end: str,
+        limit: int,
+    ) -> list[dict]:
+        fts_query = _build_fts5_query(normalized_keyword)
+        if not fts_query:
+            return []
+
+        rows = conn.execute(
+            """
+            WITH prioritized_products AS (
+                SELECT
+                    product_code,
+                    name,
+                    unit,
+                    quantity,
+                    sale_price,
+                    updated_at,
+                    description,
+                    note,
+                    0 AS priority
+                FROM products
+                WHERE product_code = ?
+
+                UNION ALL
+
+                SELECT
+                    product_code,
+                    name,
+                    unit,
+                    quantity,
+                    sale_price,
+                    updated_at,
+                    description,
+                    note,
+                    1 AS priority
+                FROM products
+                WHERE product_code >= ? AND product_code < ?
+                  AND product_code <> ?
+
+                UNION ALL
+
+                SELECT
+                    product_code,
+                    name,
+                    unit,
+                    quantity,
+                    sale_price,
+                    updated_at,
+                    description,
+                    note,
+                    2 AS priority
+                FROM products
+                WHERE name >= ? COLLATE NOCASE AND name < ? COLLATE NOCASE
+                  AND product_code <> ?
+                  AND NOT (product_code >= ? AND product_code < ?)
+
+                UNION ALL
+
+                SELECT
+                    products.product_code,
+                    products.name,
+                    products.unit,
+                    products.quantity,
+                    products.sale_price,
+                    products.updated_at,
+                    products.description,
+                    products.note,
+                    3 AS priority
+                FROM products_fts
+                INNER JOIN products ON products.rowid = products_fts.rowid
+                WHERE products_fts MATCH ?
+                  AND products.product_code <> ?
+                  AND NOT (products.product_code >= ? AND products.product_code < ?)
+                  AND NOT (products.name >= ? COLLATE NOCASE AND products.name < ? COLLATE NOCASE)
+            )
+            SELECT
+                product_code,
+                name,
+                unit,
+                quantity,
+                sale_price,
+                updated_at,
+                description,
+                note
+            FROM prioritized_products
+            ORDER BY
+                priority ASC,
+                name COLLATE NOCASE ASC,
+                updated_at DESC,
+                product_code ASC
+            LIMIT ?
+            """,
+            (
+                normalized_keyword,
+                code_prefix_start,
+                code_prefix_end,
+                normalized_keyword,
+                name_prefix_start,
+                name_prefix_end,
+                normalized_keyword,
+                code_prefix_start,
+                code_prefix_end,
+                fts_query,
+                normalized_keyword,
+                code_prefix_start,
+                code_prefix_end,
+                name_prefix_start,
+                name_prefix_end,
+                limit,
+            ),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _search_products_with_like_fallback(
+        self,
+        conn,
+        normalized_keyword: str,
+        code_prefix_start: str,
+        code_prefix_end: str,
+        name_prefix_start: str,
+        name_prefix_end: str,
+        excluded_codes: list[str],
+        limit: int,
+    ) -> list[dict]:
+        if limit <= 0:
+            return []
+
+        contains_kw = f"%{normalized_keyword}%"
+        excluded_clause = ""
+        params: list[str | int] = [
+            contains_kw,
+            contains_kw,
+            normalized_keyword,
+            code_prefix_start,
+            code_prefix_end,
+            name_prefix_start,
+            name_prefix_end,
+        ]
+
+        if excluded_codes:
+            placeholders = ", ".join("?" for _ in excluded_codes)
+            excluded_clause = f"AND product_code NOT IN ({placeholders})"
+            params.extend(excluded_codes)
+
+        params.append(limit)
+        rows = conn.execute(
+            f"""
+            SELECT
+                product_code,
+                name,
+                unit,
+                quantity,
+                sale_price,
+                updated_at,
+                description,
+                note
+            FROM products
+            WHERE (name LIKE ? OR description LIKE ?)
+              AND product_code <> ?
+              AND NOT (product_code >= ? AND product_code < ?)
+              AND NOT (name >= ? COLLATE NOCASE AND name < ? COLLATE NOCASE)
+              {excluded_clause}
+            ORDER BY name COLLATE NOCASE ASC, updated_at DESC, product_code ASC
+            LIMIT ?
+            """,
+            tuple(params),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def list_products(self) -> list[dict]:
         with get_connection() as conn:
             rows = conn.execute(
@@ -215,49 +408,37 @@ class ProductRepository:
         if not normalized_keyword:
             return []
 
-        exact_kw = normalized_keyword
-        prefix_kw = f"{normalized_keyword}%"
-        contains_kw = f"%{normalized_keyword}%"
+        code_prefix_start, code_prefix_end = _prefix_bounds(normalized_keyword)
+        name_prefix_start, name_prefix_end = _prefix_bounds(normalized_keyword)
         with get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT
-                    product_code,
-                    name,
-                    unit,
-                    quantity,
-                    sale_price,
-                    updated_at,
-                    description,
-                    note
-                FROM products
-                WHERE product_code = ?
-                   OR product_code LIKE ?
-                   OR name LIKE ?
-                   OR description LIKE ?
-                ORDER BY
-                    CASE
-                        WHEN product_code = ? THEN 0
-                        WHEN product_code LIKE ? THEN 1
-                        WHEN name LIKE ? THEN 2
-                        ELSE 3
-                    END,
-                    name COLLATE NOCASE ASC,
-                    updated_at DESC,
-                    product_code ASC
-                LIMIT 20
-                """,
-                (
-                    exact_kw,
-                    prefix_kw,
-                    prefix_kw,
-                    contains_kw,
-                    exact_kw,
-                    prefix_kw,
-                    prefix_kw,
-                ),
-            ).fetchall()
-            return [dict(row) for row in rows]
+            try:
+                rows = self._search_products_with_fts(
+                    conn,
+                    normalized_keyword,
+                    code_prefix_start,
+                    code_prefix_end,
+                    name_prefix_start,
+                    name_prefix_end,
+                    20,
+                )
+            except Exception:
+                rows = []
+
+            if len(rows) >= 20:
+                return rows
+
+            excluded_codes = [str(row["product_code"]) for row in rows]
+            fallback_rows = self._search_products_with_like_fallback(
+                conn,
+                normalized_keyword,
+                code_prefix_start,
+                code_prefix_end,
+                name_prefix_start,
+                name_prefix_end,
+                excluded_codes,
+                20 - len(rows),
+            )
+            return rows + fallback_rows
 
     def decrease_stocks(self, lines: Iterable[dict]) -> None:
         with get_connection() as conn:
@@ -912,7 +1093,7 @@ class ReportRepository:
                 SELECT product_code, name, quantity, sale_price
                 FROM products
                 WHERE quantity > 0
-                ORDER BY name ASC, product_code ASC
+                ORDER BY name COLLATE NOCASE ASC, product_code ASC
                 """
             ).fetchall()
             return [dict(row) for row in rows]
