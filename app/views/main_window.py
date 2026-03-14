@@ -642,7 +642,6 @@ class MainWindow(QMainWindow):
         revenue_cards.addWidget(self.revenue_total_card)
         revenue_cards.addWidget(self.revenue_count_card)
         revenue_layout.addLayout(revenue_cards)
-        report_panels.addWidget(revenue_group, 1)
 
         goods_group = QGroupBox("Báo cáo hàng hóa")
         goods_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -694,6 +693,8 @@ class MainWindow(QMainWindow):
         goods_cards.addWidget(self.goods_secondary_card)
         goods_layout.addLayout(goods_cards)
         report_panels.addWidget(goods_group, 1)
+
+        report_panels.addWidget(revenue_group, 1)
 
         layout.addLayout(report_panels)
 
@@ -1696,7 +1697,14 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_products(self) -> None:
-        products = self.product_controller.list_products()
+        products = sorted(
+            self.product_controller.list_products(),
+            key=lambda item: (
+                -int(item.get("sale_price", 0) or 0),
+                str(item.get("name", "")).casefold(),
+                str(item.get("product_code", "")),
+            ),
+        )
         self.product_map = {item["product_code"]: item for item in products}
         self._products_loaded = True
 
