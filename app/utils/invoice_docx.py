@@ -23,7 +23,6 @@ from app.utils.time_utils import now_utc7
 ROOT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = ROOT_DIR / "template.docx"
 EXPORT_DIR = ROOT_DIR / "data" / "exported_invoices"
-PREVIEW_ASSET_DIR = ROOT_DIR / "data" / ".preview_assets"
 SCREEN_IMAGE_PATH = ROOT_DIR / "Screen.png"
 
 DOCUMENT_VARIANTS = {
@@ -595,58 +594,20 @@ def _image_file_to_data_uri(path: Path) -> str:
 
 @lru_cache(maxsize=1)
 def _load_template_preview_assets() -> dict:
-    company_lines: list[str] = []
-    account_label = "Tài khoản"
-    logo_uri = ""
-    qr_uri = ""
     page_margin_mm = {"top": 25.0, "right": 15.0, "bottom": 20.0, "left": 23.0}
-    header_widths = [20.5, 61.3, 18.2]
     item_widths = [4.75, 21.54, 35.91, 6.57, 5.80, 11.98, 14.69]
-    logo_size_mm = {"width": 31.5, "height": 23.7}
-    qr_size_mm = {"width": 25.9, "height": 21.6}
 
     if TEMPLATE_PATH.exists():
-        doc = Document(str(TEMPLATE_PATH))
-        if doc.tables:
-            header_table = doc.tables[0]
-            if len(header_table.rows) > 0:
-                company_lines = [
-                    line.strip()
-                    for line in header_table.cell(0, 1).text.splitlines()
-                    if line.strip()
-                ]
-                account_label = header_table.cell(0, 2).text.strip() or account_label
-
         with ZipFile(TEMPLATE_PATH) as archive:
-            pass
-            # media_names = sorted(
-            #     name
-            #     for name in archive.namelist()
-            #     if name.startswith("word/media/") and not name.endswith("/")
-            # )
-            # PREVIEW_ASSET_DIR.mkdir(parents=True, exist_ok=True)
-            # if media_names:
-            #     logo_path = PREVIEW_ASSET_DIR / Path(media_names[0]).name
-            #     logo_path.write_bytes(archive.read(media_names[0]))
-            #     logo_uri = logo_path.name
-            # if len(media_names) > 1:
-            #     qr_path = PREVIEW_ASSET_DIR / Path(media_names[1]).name
-            #     qr_path.write_bytes(archive.read(media_names[1]))
-            #     qr_uri = qr_path.name
-
             from xml.etree import ElementTree as ET
 
             ns = {
                 "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-                "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
             }
             root = ET.fromstring(archive.read("word/document.xml"))
 
             def twips_to_mm(value: str) -> float:
                 return round(int(value) * 25.4 / 1440, 2)
-
-            def emu_to_mm(value: str) -> float:
-                return round(int(value) / 36000, 2)
 
             sect = root.find('.//w:sectPr', ns)
             if sect is not None:
@@ -660,29 +621,6 @@ def _load_template_preview_assets() -> dict:
                     }
 
             tables = root.findall('.//w:tbl', ns)
-            if len(tables) > 0:
-                grid = tables[0].find('./w:tblGrid', ns)
-                if grid is not None:
-                    cols = [int(col.attrib[f"{{{ns['w']}}}w"]) for col in grid.findall('w:gridCol', ns)]
-                    total = sum(cols) or 1
-                    header_widths = [round(col * 100 / total, 2) for col in cols]
-
-                drawings = tables[0].findall('.//w:drawing', ns)
-                if len(drawings) > 0:
-                    extent = drawings[0].find('.//wp:extent', ns)
-                    if extent is not None:
-                        logo_size_mm = {
-                            "width": emu_to_mm(extent.attrib.get("cx", "1188085")),
-                            "height": emu_to_mm(extent.attrib.get("cy", "896620")),
-                        }
-                if len(drawings) > 1:
-                    extent = drawings[1].find('.//wp:extent', ns)
-                    if extent is not None:
-                        qr_size_mm = {
-                            "width": emu_to_mm(extent.attrib.get("cx", "977900")),
-                            "height": emu_to_mm(extent.attrib.get("cy", "817245")),
-                        }
-
             if len(tables) > 1:
                 grid = tables[1].find('./w:tblGrid', ns)
                 if grid is not None:
@@ -691,15 +629,8 @@ def _load_template_preview_assets() -> dict:
                     item_widths = [round(col * 100 / total, 2) for col in cols]
 
     return {
-        "company_lines": company_lines,
-        "account_label": account_label,
-        "logo_uri": logo_uri,
-        "qr_uri": qr_uri,
         "page_margin_mm": page_margin_mm,
-        "header_widths": header_widths,
         "item_widths": item_widths,
-        "logo_size_mm": logo_size_mm,
-        "qr_size_mm": qr_size_mm,
     }
 
 
