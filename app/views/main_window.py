@@ -5,7 +5,7 @@ from typing import Any
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QEvent, QEasingCurve, QPropertyAnimation, QSettings, Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -214,8 +214,9 @@ class MainWindow(QMainWindow):
         compact_group_style = (
             "QGroupBox { margin-top: 8px; padding: 6px; }"
             "QGroupBox::title { left: 8px; padding: 0 3px; }"
+            "QLabel { padding: 0px; margin: 0px; }"
         )
-        compact_input_style = "padding: 4px 6px;"
+        compact_input_style = "padding: 2px 6px;"
 
         customer_box = QGroupBox("Thông tin lên đơn")
         customer_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -268,6 +269,8 @@ class MainWindow(QMainWindow):
         customer_grid.setColumnStretch(3, 2)
         customer_grid.setColumnStretch(5, 2)
 
+        self.customer_box = customer_box
+        self.customer_grid = customer_grid
         layout.addWidget(customer_box)
 
         add_item_box = QGroupBox("Thêm hàng hóa")
@@ -298,7 +301,7 @@ class MainWindow(QMainWindow):
         self.order_qty_spin.setMinimumHeight(28)
         self.order_price_spin.setStyleSheet(compact_input_style)
         self.order_price_spin.setMinimumHeight(28)
-        self.add_line_btn.setStyleSheet("padding: 6px 10px;")
+        self.add_line_btn.setStyleSheet("padding: 4px 10px;")
         self.add_line_btn.setMinimumHeight(30)
         self.add_line_btn.clicked.connect(self._append_invoice_line)
 
@@ -311,6 +314,8 @@ class MainWindow(QMainWindow):
         add_grid.addWidget(self.add_line_btn, 0, 8)
         add_grid.addWidget(self.search_product_list, 1, 0, 1, 9)
 
+        self.add_item_box = add_item_box
+        self.add_grid = add_grid
         layout.addWidget(add_item_box)
 
         self.order_table = QTableWidget(0, 7)
@@ -352,6 +357,8 @@ class MainWindow(QMainWindow):
 
         self._apply_payment_summary_fonts()
 
+        self.payment_layout = payment_layout
+        self.total_row = total_row
         layout.addWidget(self.payment_box)
 
         self.export_location_box = QGroupBox("Nơi lưu file hóa đơn / báo giá")
@@ -374,6 +381,7 @@ class MainWindow(QMainWindow):
         self.choose_export_dir_btn.clicked.connect(self._choose_invoice_export_dir)
         export_location_layout.addWidget(self.export_dir_label, 1)
         export_location_layout.addWidget(self.choose_export_dir_btn)
+        self.export_location_layout = export_location_layout
         layout.addWidget(self.export_location_box)
 
         action_row = QHBoxLayout()
@@ -410,7 +418,23 @@ class MainWindow(QMainWindow):
         action_row.addWidget(self.save_quote_btn)
         action_row.addWidget(self.view_quote_btn)
         action_row.addWidget(self.export_btn)
+        self.order_action_row = action_row
         layout.addLayout(action_row)
+
+        self._order_compact_inputs = [
+            self.order_name,
+            self.order_phone,
+            self.order_created_at,
+            self.order_address,
+            self.order_email,
+            self.order_tax_code,
+            self.search_product_edit,
+            self.order_qty_spin,
+            self.order_price_spin,
+        ]
+        self._order_primary_buttons = [self.save_quote_btn, self.view_quote_btn, self.export_btn]
+
+        self._sync_order_page_compact_sizes()
 
         self.search_product_edit.textChanged.connect(self._refresh_product_suggestions)
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
@@ -1933,6 +1957,90 @@ class MainWindow(QMainWindow):
         if getattr(self, "export_location_box", None) is not None:
             self.export_location_box.setFont(export_box_font)
 
+    def _sync_order_page_compact_sizes(self) -> None:
+        app = QApplication.instance()
+        base_font = app.font() if app is not None else QFont("Times New Roman")
+        base_px = base_font.pixelSize() if base_font.pixelSize() > 0 else MIN_FONT_PX
+        text_height = QFontMetrics(base_font).height()
+        title_font = QFont(base_font)
+        title_font.setBold(True)
+        title_height = QFontMetrics(title_font).height()
+
+        control_height = max(28, text_height + 8)
+        compact_button_height = max(30, text_height + 10)
+        primary_button_height = max(46, text_height + 16)
+        group_padding = max(3, int(text_height * 0.12))
+        group_margin_top = max(12, title_height + 3)
+        h_spacing = max(3, int(text_height * 0.18))
+        v_spacing = max(2, int(text_height * 0.12))
+        box_padding = max(3, group_padding)
+        box_v_spacing = max(2, v_spacing)
+        box_h_spacing = max(3, h_spacing)
+
+        compact_group_style = (
+            f"QGroupBox {{ margin-top: {group_margin_top}px; padding: {box_padding}px; }}"
+            "QGroupBox::title { left: 8px; padding: 0 3px; }"
+            "QLabel { padding: 0px; margin: 0px; }"
+        )
+        export_group_style = (
+            f"QGroupBox {{ margin-top: {group_margin_top}px; padding: {max(4, box_padding)}px; }}"
+            "QGroupBox::title { left: 8px; padding: 0 3px; }"
+            "QLabel { padding: 0px; margin: 0px; }"
+            "QPushButton { padding: 3px 8px; border-radius: 8px; }"
+        )
+
+        if getattr(self, "customer_box", None) is not None:
+            self.customer_box.setStyleSheet(compact_group_style)
+        if getattr(self, "add_item_box", None) is not None:
+            self.add_item_box.setStyleSheet(compact_group_style)
+        if getattr(self, "export_location_box", None) is not None:
+            self.export_location_box.setStyleSheet(export_group_style)
+
+        if getattr(self, "customer_grid", None) is not None:
+            self.customer_grid.setContentsMargins(box_padding, max(2, box_padding - 1), box_padding, max(2, box_padding - 1))
+            self.customer_grid.setHorizontalSpacing(box_h_spacing)
+            self.customer_grid.setVerticalSpacing(box_v_spacing)
+        if getattr(self, "add_grid", None) is not None:
+            self.add_grid.setContentsMargins(box_padding, max(2, box_padding - 1), box_padding, max(2, box_padding - 1))
+            self.add_grid.setHorizontalSpacing(box_h_spacing)
+            self.add_grid.setVerticalSpacing(box_v_spacing)
+        if getattr(self, "payment_layout", None) is not None:
+            self.payment_layout.setContentsMargins(group_padding, max(2, group_padding - 1), group_padding, max(2, group_padding - 1))
+            self.payment_layout.setSpacing(max(2, v_spacing - 1))
+        if getattr(self, "total_row", None) is not None:
+            self.total_row.setSpacing(max(3, int(text_height * 0.18)))
+        if getattr(self, "export_location_layout", None) is not None:
+            self.export_location_layout.setContentsMargins(box_padding, max(2, box_padding - 1), box_padding, max(2, box_padding - 1))
+            self.export_location_layout.setSpacing(max(3, int(text_height * 0.18)))
+        if getattr(self, "order_action_row", None) is not None:
+            self.order_action_row.setSpacing(max(6, int(text_height * 0.35)))
+
+        for widget in getattr(self, "_order_compact_inputs", []):
+            widget.setMinimumHeight(max(control_height, widget.sizeHint().height()))
+
+        if getattr(self, "add_line_btn", None) is not None:
+            self.add_line_btn.setMinimumHeight(max(compact_button_height, self.add_line_btn.sizeHint().height()))
+        if getattr(self, "choose_export_dir_btn", None) is not None:
+            self.choose_export_dir_btn.setMinimumHeight(max(control_height, self.choose_export_dir_btn.sizeHint().height()))
+
+        for button in getattr(self, "_order_primary_buttons", []):
+            button.setMinimumHeight(max(primary_button_height, button.sizeHint().height()))
+
+        if getattr(self, "customer_suggestion_list", None) is not None:
+            self.customer_suggestion_list.setMaximumHeight(max(104, control_height * 3 + v_spacing * 2))
+        if getattr(self, "search_product_list", None) is not None:
+            self.search_product_list.setMaximumHeight(max(104, control_height * 3 + v_spacing * 2))
+
+        if getattr(self, "customer_box", None) is not None:
+            self.customer_box.setMinimumHeight(0)
+            self.customer_box.updateGeometry()
+        if getattr(self, "add_item_box", None) is not None:
+            self.add_item_box.setMinimumHeight(0)
+            self.add_item_box.updateGeometry()
+        if getattr(self, "export_location_box", None) is not None:
+            self.export_location_box.setMinimumHeight(0)
+            self.export_location_box.updateGeometry()
+
     def _sync_font_by_window_size(self) -> None:
         width_factor = self.width() / 72
         height_factor = self.height() / 48
@@ -1946,6 +2054,7 @@ class MainWindow(QMainWindow):
         app.setFont(font)
 
         self._apply_payment_summary_fonts()
+        self._sync_order_page_compact_sizes()
 
         export_font = QFont(font)
         export_font.setPixelSize(px + 2)
