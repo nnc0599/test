@@ -190,6 +190,12 @@ class MainWindow(QMainWindow):
     def _apply_uniform_list_row_heights(self) -> None:
         for widget in self.findChildren(QListWidget):
             widget.setSpacing(0)
+            if widget is getattr(self, "search_product_list", None):
+                widget.setStyleSheet(
+                    "QListWidget { border: 1px solid #CBD5E1; border-radius: 10px; background: #FFFFFF; padding: 4px; }"
+                    "QListWidget::item { border: none; margin: 0; padding: 0; }"
+                )
+                continue
             existing_style = widget.styleSheet().strip()
             item_style = (
                 f"QListWidget::item {{ min-height: {LIST_ROW_HEIGHT_PX}px; "
@@ -1105,13 +1111,53 @@ class MainWindow(QMainWindow):
             return
 
         for item in products:
-            label = f"{item['product_code']} | {item['name']} | Tồn: {item['quantity']}"
-            widget_item = QListWidgetItem(label)
+            widget_item = QListWidgetItem()
             widget_item.setData(Qt.UserRole, item["product_code"])
+            suggestion_widget = self._build_product_suggestion_widget(item)
+            widget_item.setSizeHint(suggestion_widget.sizeHint())
             self.search_product_list.addItem(widget_item)
+            self.search_product_list.setItemWidget(widget_item, suggestion_widget)
 
         self.search_product_list.setCurrentRow(0)
         self.search_product_list.setVisible(bool(keyword.strip()))
+
+    def _build_product_suggestion_widget(self, product: dict) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(3)
+
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(8)
+
+        code_label = QLabel(str(product.get("product_code", "") or ""))
+        code_label.setStyleSheet(
+            "QLabel { background: #E0F2FE; color: #075985; border-radius: 6px; padding: 2px 8px; font-weight: 700; }"
+        )
+        code_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        stock_value = int(product.get("quantity", 0) or 0)
+        stock_label = QLabel(f"Tồn: {stock_value}")
+        stock_label.setStyleSheet(
+            "QLabel { color: #475569; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 2px 8px; font-weight: 600; }"
+        )
+        stock_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        top_row.addWidget(code_label)
+        top_row.addWidget(stock_label)
+        top_row.addStretch(1)
+
+        name_label = QLabel(str(product.get("name", "") or ""))
+        name_label.setWordWrap(True)
+        name_label.setStyleSheet(
+            "QLabel { color: #0F172A; background: transparent; font-weight: 600; padding: 0px; margin: 0px; }"
+        )
+        name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        layout.addLayout(top_row)
+        layout.addWidget(name_label)
+        return container
 
     def _on_product_suggestion_clicked(self, item: QListWidgetItem) -> None:
         product_code = item.data(Qt.UserRole)

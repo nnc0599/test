@@ -324,8 +324,8 @@ def _ensure_products_fts(conn) -> None:
         conn.executescript(PRODUCTS_FTS_TRIGGERS_SQL)
 
         product_count = int(conn.execute("SELECT COUNT(*) FROM products").fetchone()[0])
-        fts_count = int(conn.execute("SELECT COUNT(*) FROM products_fts").fetchone()[0])
-        if product_count != fts_count:
+        indexed_count = int(conn.execute("SELECT COUNT(*) FROM products_fts_docsize").fetchone()[0])
+        if product_count != indexed_count:
             conn.execute("INSERT INTO products_fts(products_fts) VALUES ('rebuild')")
     except sqlite3.OperationalError:
         # Fallback an toàn nếu SQLite hiện tại không có FTS5.
