@@ -143,8 +143,8 @@ def _sanitize_file_stem(value: str) -> str:
 def build_quotation_output_name(customer_name: str, created_at: str) -> str:
     created_time = _parse_created_at(created_at)
     safe_name = _sanitize_file_stem(customer_name or "Khach hang")
-    timestamp = created_time.strftime("%Y%m%d_%H%M%S")
-    return f"{safe_name} Bao gia {timestamp}.docx"
+    timestamp = created_time.strftime("%Y%m%d_%H%M")
+    return f"{timestamp} - {safe_name}.docx"
 
 
 def build_invoice_output_name(invoice_no: str, customer_name: str) -> str:
