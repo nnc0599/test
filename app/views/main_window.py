@@ -505,6 +505,7 @@ class MainWindow(QMainWindow):
 
         actions = QHBoxLayout()
         self.btn_add_product = QPushButton("Thêm sản phẩm")
+        self.btn_export_products = QPushButton("Tải thông tin sản phẩm")
         self.btn_edit_product = QPushButton("Sửa thông tin")
         self.btn_product_history = QPushButton("Lịch sử sửa đổi")
         self.btn_delete_product = QPushButton("Xóa sản phẩm")
@@ -512,6 +513,10 @@ class MainWindow(QMainWindow):
         self.btn_add_product.setStyleSheet(
             "QPushButton { background: #22C55E; color: #0B1A10; }"
             "QPushButton:hover { background: #16A34A; color: white; }"
+        )
+        self.btn_export_products.setStyleSheet(
+            "QPushButton { background: #38BDF8; color: #082F49; }"
+            "QPushButton:hover { background: #0EA5E9; color: white; }"
         )
         self.btn_edit_product.setStyleSheet(
             "QPushButton { background: #FDBA74; color: #4A2A00; }"
@@ -529,7 +534,7 @@ class MainWindow(QMainWindow):
             "QPushButton:disabled { background: #FECACA; color: #7F1D1D; }"
         )
 
-        for btn in [self.btn_add_product, self.btn_edit_product, self.btn_product_history, self.btn_delete_product]:
+        for btn in [self.btn_add_product, self.btn_export_products, self.btn_edit_product, self.btn_product_history, self.btn_delete_product]:
             btn.setMinimumHeight(56)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             actions.addWidget(btn)
@@ -559,6 +564,7 @@ class MainWindow(QMainWindow):
         self.btn_delete_product.setEnabled(False)
 
         self.btn_add_product.clicked.connect(self._on_add_product)
+        self.btn_export_products.clicked.connect(self._on_export_products)
         self.btn_edit_product.clicked.connect(self._on_edit_product)
         self.btn_product_history.clicked.connect(self._on_view_product_history)
         self.btn_delete_product.clicked.connect(self._on_delete_product)
@@ -665,7 +671,7 @@ class MainWindow(QMainWindow):
         self.goods_period_type_combo.addItem("Ngày", "day")
         self.goods_period_type_combo.addItem("Tháng", "month")
         self.goods_period_type_combo.addItem("Năm", "year")
-        self.goods_period_type_combo.setCurrentIndex(1)
+        self.goods_period_type_combo.setCurrentIndex(0)
         self.goods_period_type_combo.setMinimumWidth(120)
         goods_controls.addWidget(self.goods_period_type_combo, 0, 3)
 
@@ -1790,6 +1796,26 @@ class MainWindow(QMainWindow):
             if missing_code_count > 0:
                 message += f"\nCó {missing_code_count} sản phẩm không có Mã sản phẩm."
             QMessageBox.information(self, "Thành công", message)
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi", str(exc))
+
+    def _on_export_products(self) -> None:
+        default_name = f"thong_tin_san_pham_{now_iso_utc7()[:10]}.xlsx"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Lưu thông tin sản phẩm",
+            default_name,
+            "Excel Files (*.xlsx)",
+        )
+        if not file_path:
+            return
+
+        if not file_path.lower().endswith(".xlsx"):
+            file_path = f"{file_path}.xlsx"
+
+        try:
+            self.product_controller.export_products_to_excel(file_path)
+            QMessageBox.information(self, "Thành công", "Đã tải thông tin sản phẩm thành công")
         except Exception as exc:
             QMessageBox.critical(self, "Lỗi", str(exc))
 

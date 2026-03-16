@@ -17,6 +17,17 @@ PRODUCT_IMPORT_HEADERS = [
     "Mô tả",
 ]
 
+PRODUCT_EXPORT_HEADERS = [
+    "Mã sản phẩm",
+    "Tên sản phẩm",
+    "Đơn vị tính",
+    "Số lượng",
+    "Giá bán",
+    "Mô tả",
+    "Ghi chú",
+    "Ngày cập nhật",
+]
+
 
 class ProductController:
     def __init__(self, repo: ProductRepository):
@@ -98,6 +109,31 @@ class ProductController:
                 0,
                 "Mô tả sản phẩm mẫu",
             ])
+            workbook.save(file_path)
+        finally:
+            workbook.close()
+
+    def export_products_to_excel(self, file_path: str) -> None:
+        workbook = Workbook()
+        try:
+            sheet = workbook.active
+            sheet.title = "SanPham"
+            sheet.append(PRODUCT_EXPORT_HEADERS)
+
+            for product in self.repo.list_products():
+                sheet.append(
+                    [
+                        self._as_text(product.get("product_code")),
+                        self._as_text(product.get("name")),
+                        self._as_text(product.get("unit")),
+                        self._as_int(product.get("quantity")),
+                        self._as_int(product.get("sale_price")),
+                        self._as_text(product.get("description")),
+                        self._as_text(product.get("note")),
+                        self._as_text(product.get("updated_at")),
+                    ]
+                )
+
             workbook.save(file_path)
         finally:
             workbook.close()
