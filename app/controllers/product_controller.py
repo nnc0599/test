@@ -7,6 +7,7 @@ from openpyxl import load_workbook
 
 from app.config import PRODUCT_CATEGORIES
 from app.models.repositories import ProductRepository
+from app.utils.item_sort import sort_products_by_category_priority
 
 
 PRODUCT_IMPORT_HEADERS = [
@@ -31,6 +32,7 @@ LEGACY_PRODUCT_IMPORT_HEADERS = [
 PRODUCT_EXPORT_HEADERS = [
     "Mã sản phẩm",
     "Tên sản phẩm",
+    "Phân loại",
     "Đơn vị tính",
     "Số lượng",
     "Giá bán",
@@ -48,12 +50,12 @@ class ProductController:
         self.repo = repo
 
     def list_products(self) -> list[dict]:
-        return self.repo.list_products()
+        return sort_products_by_category_priority(self.repo.list_products())
 
     def search_products(self, keyword: str) -> list[dict]:
         if not keyword.strip():
-            return self.repo.list_products()[:20]
-        return self.repo.search_products(keyword)
+            return sort_products_by_category_priority(self.repo.list_products())[:20]
+        return sort_products_by_category_priority(self.repo.search_products(keyword))
 
     def create_product(self, payload: dict) -> None:
         if not payload.get("product_code", "").strip():
@@ -156,6 +158,7 @@ class ProductController:
                     [
                         self._as_text(product.get("product_code")),
                         self._as_text(product.get("name")),
+                        self._as_text(product.get("category")),
                         self._as_text(product.get("unit")),
                         self._as_int(product.get("quantity")),
                         self._as_int(product.get("sale_price")),

@@ -1,4 +1,5 @@
 from app.models.repositories import ReportRepository
+from app.utils.item_sort import sort_products_by_category_priority
 
 
 class ReportController:
@@ -14,7 +15,7 @@ class ReportController:
         }
 
     def sold_products_report(self, period_type: str, period_value: str) -> dict:
-        rows = self.repo.sold_products_by_period(period_type, period_value)
+        rows = sort_products_by_category_priority(self.repo.sold_products_by_period(period_type, period_value))
         return {
             "rows": rows,
             "product_count": len(rows),
@@ -23,7 +24,7 @@ class ReportController:
         }
 
     def stock_products_report(self) -> dict:
-        rows = self.repo.stock_products()
+        rows = sort_products_by_category_priority(self.repo.stock_products())
         return {
             "rows": rows,
             "product_count": len(rows),

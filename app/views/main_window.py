@@ -40,7 +40,7 @@ from app.controllers.report_controller import ReportController
 from app.utils.invoice_docx import EXPORT_DIR
 from app.utils.time_utils import now_iso_utc7
 from app.utils.invoice_docx import build_invoice_output_name, build_quotation_output_name, export_invoice_docx, export_report_docx
-from app.utils.item_sort import sort_items_by_unit_price_desc
+from app.utils.item_sort import sort_items_by_unit_price_desc, sort_products_by_category_priority
 from app.views.dialogs.auth_dialog import PasswordDialog
 from app.views.dialogs.description_dialog import DescriptionDialog
 from app.views.dialogs.invoice_detail_dialog import InvoiceDetailDialog
@@ -1291,6 +1291,7 @@ class MainWindow(QMainWindow):
         line = {
             "product_code": product["product_code"],
             "product_name": product["name"],
+            "category": product.get("category", ""),
             "unit": product.get("unit", ""),
             "quantity": qty,
             "unit_price": unit_price,
@@ -1546,6 +1547,7 @@ class MainWindow(QMainWindow):
             {
                 "product_code": str(item.get("product_code", "") or ""),
                 "product_name": str(item.get("product_name", "") or ""),
+                "category": str(item.get("category", "") or ""),
                 "unit": str(item.get("unit", "") or ""),
                 "quantity": int(item.get("quantity", 0) or 0),
                 "unit_price": int(item.get("unit_price", 0) or 0),
@@ -1698,14 +1700,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_products(self) -> None:
-        products = sorted(
-            self.product_controller.list_products(),
-            key=lambda item: (
-                -int(item.get("sale_price", 0) or 0),
-                str(item.get("name", "")).casefold(),
-                str(item.get("product_code", "")),
-            ),
-        )
+        products = sort_products_by_category_priority(self.product_controller.list_products())
         self.product_map = {item["product_code"]: item for item in products}
         self._products_loaded = True
 
@@ -1777,6 +1772,7 @@ class MainWindow(QMainWindow):
             mode="add",
             import_loader=self.product_controller.parse_product_import_file,
             template_exporter=self.product_controller.export_product_import_template,
+            product_exporter=self.product_controller.export_products_to_excel,
         )
         if dlg.exec() != ProductFormDialog.Accepted:
             return

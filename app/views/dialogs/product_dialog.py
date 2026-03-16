@@ -32,6 +32,7 @@ class ProductFormDialog(QDialog):
         initial: dict | None = None,
         import_loader=None,
         template_exporter=None,
+        product_exporter=None,
     ):
         super().__init__(parent)
         disable_minimize_button(self)
@@ -39,6 +40,7 @@ class ProductFormDialog(QDialog):
         self.initial = initial or {}
         self.import_loader = import_loader
         self.template_exporter = template_exporter
+        self.product_exporter = product_exporter
         self._payload_cache: dict | None = None
         self._import_payloads_cache: list[dict] = []
         self._missing_code_count = 0
@@ -118,8 +120,12 @@ class ProductFormDialog(QDialog):
         action_row = QHBoxLayout()
         action_row.addStretch(1)
         if mode == "add":
+            if self.product_exporter is not None:
+                self.download_products_button = QPushButton("Thông tin SP")
+                self.download_products_button.clicked.connect(self._handle_download_products)
+                action_row.addWidget(self.download_products_button)
             if self.template_exporter is not None:
-                self.download_template_button = QPushButton("Tải file mẫu")
+                self.download_template_button = QPushButton("Mẫu upload")
                 self.download_template_button.clicked.connect(self._handle_download_template)
                 action_row.addWidget(self.download_template_button)
             if self.import_loader is not None:
@@ -253,6 +259,27 @@ class ProductFormDialog(QDialog):
             return
 
         QMessageBox.information(self, "Thành công", "Đã tải file mẫu thành công")
+
+    def _handle_download_products(self) -> None:
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Lưu thông tin sản phẩm",
+            f"thong_tin_san_pham_{now_iso_utc7()[:10]}.xlsx",
+            "Excel Files (*.xlsx)",
+        )
+        if not file_path:
+            return
+
+        if not file_path.lower().endswith(".xlsx"):
+            file_path = f"{file_path}.xlsx"
+
+        try:
+            self.product_exporter(file_path)
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi", str(exc))
+            return
+
+        QMessageBox.information(self, "Thành công", "Đã tải thông tin sản phẩm thành công")
 
     def payload(self) -> dict:
         return dict(self._payload_cache or self._collect_payload())

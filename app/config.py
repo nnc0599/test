@@ -20,3 +20,13 @@ PRODUCT_CATEGORIES = (
 	"Biến tần Hybrid",
 	"Phụ kiện",
 )
+
+PRODUCT_CATEGORY_DISPLAY_PRIORITY = (
+	"Pin NLMT",
+	"Biến tần Hybrid",
+	"Biến tần",
+	"Biến tần bơm",
+	"Pin lưu trữ 48V",
+	"Pin lưu trữ 24V",
+	"Phụ kiện",
+)

@@ -808,11 +808,13 @@ class InvoiceRepository:
                 SELECT
                     product_code,
                     product_name,
+                    COALESCE(products.category, '') AS category,
                     unit,
                     quantity,
                     unit_price,
                     line_total
                 FROM quotation_items
+                LEFT JOIN products ON products.product_code = quotation_items.product_code
                 WHERE quotation_id = ?
                 ORDER BY unit_price DESC, line_total DESC, product_name COLLATE NOCASE ASC, id ASC
                 """,
@@ -856,11 +858,13 @@ class InvoiceRepository:
                 SELECT
                     product_code,
                     product_name,
+                    COALESCE(products.category, '') AS category,
                     unit,
                     quantity,
                     unit_price,
                     line_total
                 FROM quotation_items
+                LEFT JOIN products ON products.product_code = quotation_items.product_code
                 WHERE quotation_id = ?
                 ORDER BY unit_price DESC, line_total DESC, product_name COLLATE NOCASE ASC, id ASC
                 """,
@@ -996,6 +1000,7 @@ class InvoiceRepository:
                 SELECT
                     invoice_items.product_code,
                     invoice_items.product_name,
+                    COALESCE(products.category, '') AS category,
                     COALESCE(invoice_items.unit, products.unit, '') AS unit,
                     invoice_items.quantity,
                     invoice_items.unit_price,
@@ -1083,13 +1088,15 @@ class ReportRepository:
                 SELECT
                     invoice_items.product_code,
                     invoice_items.product_name,
+                    COALESCE(products.category, '') AS category,
                     COALESCE(invoice_items.unit, '') AS unit,
                     SUM(invoice_items.quantity) AS sold_quantity,
                     SUM(invoice_items.line_total) AS sold_amount
                 FROM invoice_items
                 INNER JOIN invoices ON invoices.invoice_no = invoice_items.invoice_no
+                LEFT JOIN products ON products.product_code = invoice_items.product_code
                 WHERE invoices.created_at >= ? AND invoices.created_at < ?
-                GROUP BY invoice_items.product_code, invoice_items.product_name, COALESCE(invoice_items.unit, '')
+                GROUP BY invoice_items.product_code, invoice_items.product_name, COALESCE(products.category, ''), COALESCE(invoice_items.unit, '')
                 ORDER BY sold_quantity DESC, sold_amount DESC, invoice_items.product_name ASC
                 """,
                 (start, end),
@@ -1100,7 +1107,7 @@ class ReportRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT product_code, name, quantity, sale_price
+                SELECT product_code, name, category, quantity, sale_price
                 FROM products
                 WHERE quantity > 0
                 ORDER BY name COLLATE NOCASE ASC, product_code ASC
