@@ -505,7 +505,6 @@ class MainWindow(QMainWindow):
 
         actions = QHBoxLayout()
         self.btn_add_product = QPushButton("Thêm sản phẩm")
-        self.btn_export_products = QPushButton("Tải thông tin sản phẩm")
         self.btn_edit_product = QPushButton("Sửa thông tin")
         self.btn_product_history = QPushButton("Lịch sử sửa đổi")
         self.btn_delete_product = QPushButton("Xóa sản phẩm")
@@ -513,10 +512,6 @@ class MainWindow(QMainWindow):
         self.btn_add_product.setStyleSheet(
             "QPushButton { background: #22C55E; color: #0B1A10; }"
             "QPushButton:hover { background: #16A34A; color: white; }"
-        )
-        self.btn_export_products.setStyleSheet(
-            "QPushButton { background: #38BDF8; color: #082F49; }"
-            "QPushButton:hover { background: #0EA5E9; color: white; }"
         )
         self.btn_edit_product.setStyleSheet(
             "QPushButton { background: #FDBA74; color: #4A2A00; }"
@@ -534,16 +529,16 @@ class MainWindow(QMainWindow):
             "QPushButton:disabled { background: #FECACA; color: #7F1D1D; }"
         )
 
-        for btn in [self.btn_add_product, self.btn_export_products, self.btn_edit_product, self.btn_product_history, self.btn_delete_product]:
+        for btn in [self.btn_add_product, self.btn_edit_product, self.btn_product_history, self.btn_delete_product]:
             btn.setMinimumHeight(56)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             actions.addWidget(btn)
 
         layout.addLayout(actions)
 
-        self.product_table = QTableWidget(0, 6)
+        self.product_table = QTableWidget(0, 7)
         self.product_table.setHorizontalHeaderLabels(
-            ["Mã sản phẩm", "Tên sản phẩm", "Số lượng", "Giá bán", "Mô tả", "Ngày cập nhật"]
+            ["Mã sản phẩm", "Tên sản phẩm", "Phân loại", "Số lượng", "Giá bán", "Mô tả", "Ngày cập nhật"]
         )
         self.product_table.verticalHeader().setVisible(False)
         self.product_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -556,6 +551,7 @@ class MainWindow(QMainWindow):
         p_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         p_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         p_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        p_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
 
         layout.addWidget(self.product_table)
 
@@ -564,7 +560,6 @@ class MainWindow(QMainWindow):
         self.btn_delete_product.setEnabled(False)
 
         self.btn_add_product.clicked.connect(self._on_add_product)
-        self.btn_export_products.clicked.connect(self._on_export_products)
         self.btn_edit_product.clicked.connect(self._on_edit_product)
         self.btn_product_history.clicked.connect(self._on_view_product_history)
         self.btn_delete_product.clicked.connect(self._on_delete_product)
@@ -1719,13 +1714,14 @@ class MainWindow(QMainWindow):
             base_values = [
                 product["product_code"],
                 product["name"],
+                product.get("category", ""),
                 str(product["quantity"]),
                 format_money(product["sale_price"]),
                 "Xem thêm",
                 product["updated_at"],
             ]
             for col, value in enumerate(base_values):
-                if col == 4:
+                if col == 5:
                     btn = QPushButton("Xem thêm")
                     btn.clicked.connect(
                         lambda checked=False, p=product: self._show_product_desc_direct(p)
