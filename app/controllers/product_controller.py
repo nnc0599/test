@@ -153,7 +153,7 @@ class ProductController:
             sheet.title = "SanPham"
             sheet.append(PRODUCT_EXPORT_HEADERS)
 
-            for product in self.repo.list_products():
+            for product in self.list_products():
                 sheet.append(
                     [
                         self._as_text(product.get("product_code")),
