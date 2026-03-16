@@ -78,6 +78,7 @@ class ProductController:
                     {
                         "product_code": product_code,
                         "name": self._as_text(values[1]),
+                        "category": "",
                         "unit": self._as_text(values[2]),
                         "quantity": self._as_int(values[3]),
                         "sale_price": self._as_int(values[4]),

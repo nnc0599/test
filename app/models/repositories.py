@@ -73,6 +73,7 @@ class ProductRepository:
                 SELECT
                     product_code,
                     name,
+                    category,
                     unit,
                     quantity,
                     sale_price,
@@ -88,6 +89,7 @@ class ProductRepository:
                 SELECT
                     product_code,
                     name,
+                    category,
                     unit,
                     quantity,
                     sale_price,
@@ -104,6 +106,7 @@ class ProductRepository:
                 SELECT
                     product_code,
                     name,
+                    category,
                     unit,
                     quantity,
                     sale_price,
@@ -121,6 +124,7 @@ class ProductRepository:
                 SELECT
                     products.product_code,
                     products.name,
+                    products.category,
                     products.unit,
                     products.quantity,
                     products.sale_price,
@@ -138,6 +142,7 @@ class ProductRepository:
             SELECT
                 product_code,
                 name,
+                category,
                 unit,
                 quantity,
                 sale_price,
@@ -210,6 +215,7 @@ class ProductRepository:
             SELECT
                 product_code,
                 name,
+                category,
                 unit,
                 quantity,
                 sale_price,
@@ -233,7 +239,7 @@ class ProductRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT product_code, name, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, category, unit, quantity, sale_price, updated_at, description, note
                 FROM products
                 ORDER BY updated_at DESC
                 """
@@ -244,7 +250,7 @@ class ProductRepository:
         with get_connection() as conn:
             row = conn.execute(
                 """
-                SELECT product_code, name, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, category, unit, quantity, sale_price, updated_at, description, note
                 FROM products
                 WHERE product_code = ?
                 """,
@@ -257,12 +263,13 @@ class ProductRepository:
             conn.execute(
                 """
                 INSERT INTO products (
-                    product_code, name, unit, quantity, sale_price, updated_at, description, note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    product_code, name, category, unit, quantity, sale_price, updated_at, description, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["product_code"],
                     payload["name"],
+                    payload.get("category", ""),
                     payload.get("unit", ""),
                     int(payload.get("quantity", 0)),
                     int(payload.get("sale_price", 0)),
@@ -298,13 +305,14 @@ class ProductRepository:
             conn.executemany(
                 """
                 INSERT INTO products (
-                    product_code, name, unit, quantity, sale_price, updated_at, description, note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    product_code, name, category, unit, quantity, sale_price, updated_at, description, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
                         payload["product_code"],
                         payload.get("name", ""),
+                        payload.get("category", ""),
                         payload.get("unit", ""),
                         int(payload.get("quantity", 0)),
                         int(payload.get("sale_price", 0)),
@@ -320,7 +328,7 @@ class ProductRepository:
         with get_connection() as conn:
             existing = conn.execute(
                 """
-                SELECT product_code, name, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, category, unit, quantity, sale_price, updated_at, description, note
                 FROM products
                 WHERE product_code = ?
                 """,
@@ -337,6 +345,7 @@ class ProductRepository:
                 UPDATE products
                 SET
                     name = ?,
+                    category = ?,
                     unit = ?,
                     quantity = ?,
                     sale_price = ?,
@@ -347,6 +356,7 @@ class ProductRepository:
                 """,
                 (
                     payload["name"],
+                    payload.get("category", ""),
                     payload.get("unit", ""),
                     new_quantity,
                     new_sale_price,

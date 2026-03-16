@@ -5,6 +5,7 @@ from dataclasses import dataclass
 class Product:
     product_code: str
     name: str
+    category: str
     unit: str
     quantity: int
     sale_price: int

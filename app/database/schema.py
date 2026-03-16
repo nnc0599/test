@@ -8,6 +8,7 @@ SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS products (
     product_code TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    category TEXT,
     unit TEXT,
     quantity INTEGER NOT NULL DEFAULT 0,
     sale_price INTEGER NOT NULL DEFAULT 0,
@@ -179,6 +180,7 @@ REQUIRED_TABLE_COLUMNS = {
     "products": {
         "product_code": "TEXT",
         "name": "TEXT NOT NULL",
+        "category": "TEXT",
         "unit": "TEXT",
         "quantity": "INTEGER NOT NULL DEFAULT 0",
         "sale_price": "INTEGER NOT NULL DEFAULT 0",
@@ -356,17 +358,17 @@ def seed_sample_products() -> None:
                 conn.execute(
                     """
                     UPDATE products
-                    SET name = ?, unit = ?, quantity = ?, sale_price = ?, updated_at = ?, description = ?, note = ?
+                    SET name = ?, category = ?, unit = ?, quantity = ?, sale_price = ?, updated_at = ?, description = ?, note = ?
                     WHERE product_code = ?
                     """,
-                    (row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[0]),
+                    (row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[0]),
                 )
             else:
                 conn.execute(
                     """
                     INSERT INTO products (
-                        product_code, name, unit, quantity, sale_price, updated_at, description, note
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        product_code, name, category, unit, quantity, sale_price, updated_at, description, note
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     row,
                 )

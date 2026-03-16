@@ -49,6 +49,8 @@ class ProductFormDialog(QDialog):
         self.code_edit.setPlaceholderText("Ví dụ: SP003")
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("Nhập tên sản phẩm")
+        self.category_edit = QLineEdit()
+        self.category_edit.setPlaceholderText("Ví dụ: Tấm pin, Inverter, Phụ kiện")
         self.unit_edit = QLineEdit()
         self.unit_edit.setPlaceholderText("Ví dụ: cái, hộp, bộ")
         self.updated_at_value = QLabel("Tự động lấy thời gian hiện tại")
@@ -75,13 +77,16 @@ class ProductFormDialog(QDialog):
 
         top_grid.addWidget(QLabel("Đơn vị tính"), 1, 0)
         top_grid.addWidget(self.unit_edit, 1, 1)
-        top_grid.addWidget(QLabel("Số lượng"), 1, 2)
-        top_grid.addWidget(self.quantity_spin, 1, 3)
+        top_grid.addWidget(QLabel("Phân loại"), 1, 2)
+        top_grid.addWidget(self.category_edit, 1, 3)
 
-        top_grid.addWidget(QLabel("Giá bán"), 2, 0)
-        top_grid.addWidget(self.price_spin, 2, 1)
-        top_grid.addWidget(QLabel("Ngày cập nhật"), 2, 2)
-        top_grid.addWidget(self.updated_at_value, 2, 3)
+        top_grid.addWidget(QLabel("Số lượng"), 2, 0)
+        top_grid.addWidget(self.quantity_spin, 2, 1)
+        top_grid.addWidget(QLabel("Giá bán"), 2, 2)
+        top_grid.addWidget(self.price_spin, 2, 3)
+
+        top_grid.addWidget(QLabel("Ngày cập nhật"), 3, 0)
+        top_grid.addWidget(self.updated_at_value, 3, 1, 1, 3)
 
         product_box = QGroupBox()
         product_box.setLayout(top_grid)
@@ -132,6 +137,7 @@ class ProductFormDialog(QDialog):
     def _bind_data(self) -> None:
         self.code_edit.setText(self.initial.get("product_code", ""))
         self.name_edit.setText(self.initial.get("name", ""))
+        self.category_edit.setText(self.initial.get("category", ""))
         self.unit_edit.setText(self.initial.get("unit", ""))
         self.quantity_spin.setValue(int(self.initial.get("quantity", 0)))
         self.price_spin.setValue(int(self.initial.get("sale_price", 0)))
@@ -157,6 +163,7 @@ class ProductFormDialog(QDialog):
         return {
             "product_code": self.code_edit.text().strip(),
             "name": self.name_edit.text().strip(),
+            "category": self.category_edit.text().strip(),
             "unit": self.unit_edit.text().strip(),
             "quantity": self.quantity_spin.value(),
             "sale_price": self.price_spin.value(),
