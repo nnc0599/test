@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.config import PRODUCT_CATEGORIES
 from app.utils.time_utils import now_iso_utc7
 from app.views.dialogs import disable_minimize_button
 
@@ -49,8 +51,10 @@ class ProductFormDialog(QDialog):
         self.code_edit.setPlaceholderText("Ví dụ: SP003")
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("Nhập tên sản phẩm")
-        self.category_edit = QLineEdit()
-        self.category_edit.setPlaceholderText("Ví dụ: Tấm pin, Inverter, Phụ kiện")
+        self.category_combo = QComboBox()
+        self.category_combo.addItem("Chọn phân loại", "")
+        for category in PRODUCT_CATEGORIES:
+            self.category_combo.addItem(category, category)
         self.unit_edit = QLineEdit()
         self.unit_edit.setPlaceholderText("Ví dụ: cái, hộp, bộ")
         self.updated_at_value = QLabel("Tự động lấy thời gian hiện tại")
@@ -78,7 +82,7 @@ class ProductFormDialog(QDialog):
         top_grid.addWidget(QLabel("Đơn vị tính"), 1, 0)
         top_grid.addWidget(self.unit_edit, 1, 1)
         top_grid.addWidget(QLabel("Phân loại"), 1, 2)
-        top_grid.addWidget(self.category_edit, 1, 3)
+        top_grid.addWidget(self.category_combo, 1, 3)
 
         top_grid.addWidget(QLabel("Số lượng"), 2, 0)
         top_grid.addWidget(self.quantity_spin, 2, 1)
@@ -137,7 +141,9 @@ class ProductFormDialog(QDialog):
     def _bind_data(self) -> None:
         self.code_edit.setText(self.initial.get("product_code", ""))
         self.name_edit.setText(self.initial.get("name", ""))
-        self.category_edit.setText(self.initial.get("category", ""))
+        category = str(self.initial.get("category", "")).strip()
+        category_index = self.category_combo.findData(category)
+        self.category_combo.setCurrentIndex(category_index if category_index >= 0 else 0)
         self.unit_edit.setText(self.initial.get("unit", ""))
         self.quantity_spin.setValue(int(self.initial.get("quantity", 0)))
         self.price_spin.setValue(int(self.initial.get("sale_price", 0)))
@@ -163,7 +169,7 @@ class ProductFormDialog(QDialog):
         return {
             "product_code": self.code_edit.text().strip(),
             "name": self.name_edit.text().strip(),
-            "category": self.category_edit.text().strip(),
+            "category": str(self.category_combo.currentData() or "").strip(),
             "unit": self.unit_edit.text().strip(),
             "quantity": self.quantity_spin.value(),
             "sale_price": self.price_spin.value(),
@@ -179,6 +185,9 @@ class ProductFormDialog(QDialog):
             return
         if not payload["name"]:
             QMessageBox.warning(self, "Thiếu dữ liệu", "Bạn phải nhập tên sản phẩm")
+            return
+        if not payload["category"]:
+            QMessageBox.warning(self, "Thiếu dữ liệu", "Bạn phải chọn phân loại sản phẩm")
             return
         if self.mode == "edit" and not payload["note"]:
             QMessageBox.warning(

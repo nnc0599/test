@@ -5,6 +5,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl import load_workbook
 
+from app.config import PRODUCT_CATEGORIES
 from app.models.repositories import ProductRepository
 
 
@@ -38,6 +39,9 @@ PRODUCT_EXPORT_HEADERS = [
     "Ngày cập nhật",
 ]
 
+VALID_PRODUCT_CATEGORY_SET = set(PRODUCT_CATEGORIES)
+VALID_PRODUCT_CATEGORIES_TEXT = ", ".join(PRODUCT_CATEGORIES)
+
 
 class ProductController:
     def __init__(self, repo: ProductRepository):
@@ -56,6 +60,8 @@ class ProductController:
             raise ValueError("Mã sản phẩm không được để trống")
         if not payload.get("name", "").strip():
             raise ValueError("Tên sản phẩm không được để trống")
+        payload = dict(payload)
+        payload["category"] = self._normalize_category(payload.get("category"))
         if self.repo.get_product(payload["product_code"].strip()):
             raise ValueError("Mã sản phẩm đã tồn tại, vui lòng nhập mã khác")
         self.repo.add_product(payload)
@@ -92,7 +98,11 @@ class ProductController:
                     {
                         "product_code": product_code,
                         "name": self._as_text(values[1]),
-                        "category": self._as_text(values[2]) if import_with_category else "",
+                        "category": self._normalize_category(
+                            values[2],
+                            required=import_with_category,
+                            row_number=len(products) + missing_code_count + 2,
+                        ) if import_with_category else "",
                         "unit": self._as_text(values[3] if import_with_category else values[2]),
                         "quantity": self._as_int(values[4] if import_with_category else values[3]),
                         "sale_price": self._as_int(values[5] if import_with_category else values[4]),
@@ -108,7 +118,12 @@ class ProductController:
     def create_products(self, payloads: list[dict]) -> None:
         if not payloads:
             return
-        self.repo.add_products(payloads)
+        normalized_payloads = []
+        for payload in payloads:
+            item = dict(payload)
+            item["category"] = self._normalize_category(item.get("category"), required=False)
+            normalized_payloads.append(item)
+        self.repo.add_products(normalized_payloads)
 
     def export_product_import_template(self, file_path: str) -> None:
         workbook = Workbook()
@@ -119,7 +134,7 @@ class ProductController:
             sheet.append([
                 "SP001",
                 "Tên sản phẩm mẫu",
-                "Tấm pin",
+                "Pin NLMT",
                 "cái",
                 0,
                 0,
@@ -183,7 +198,33 @@ class ProductController:
     def update_product(self, product_code: str, payload: dict) -> None:
         if not payload.get("note", "").strip():
             raise ValueError("Ghi chú là bắt buộc khi sửa thông tin sản phẩm")
+        payload = dict(payload)
+        payload["category"] = self._normalize_category(payload.get("category"))
         self.repo.update_product(product_code, payload)
+
+    @staticmethod
+    def _normalize_category(
+        value: object,
+        *,
+        required: bool = True,
+        row_number: int | None = None,
+    ) -> str:
+        text = ProductController._as_text(value)
+        if not text:
+            if required:
+                if row_number is not None:
+                    raise ValueError(f"Thiếu phân loại tại dòng {row_number}")
+                raise ValueError("Phân loại sản phẩm không được để trống")
+            return ""
+        if text not in VALID_PRODUCT_CATEGORY_SET:
+            if row_number is not None:
+                raise ValueError(
+                    f"Phân loại không hợp lệ tại dòng {row_number}. Chỉ chấp nhận: {VALID_PRODUCT_CATEGORIES_TEXT}"
+                )
+            raise ValueError(
+                f"Phân loại không hợp lệ. Chỉ chấp nhận: {VALID_PRODUCT_CATEGORIES_TEXT}"
+            )
+        return text
 
     def list_product_update_history(self, product_code: str) -> list[dict]:
         return self.repo.list_product_update_history(product_code)
