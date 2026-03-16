@@ -129,6 +129,32 @@ class OrderController:
     def cancel_quotation(self, quotation_id: int) -> None:
         self.invoice_repo.delete_quotation(quotation_id)
 
+    def update_invoice(self, invoice_no: str, customer_data: dict, invoice_data: dict, lines: list[dict]) -> None:
+        if not lines:
+            raise ValueError("Hóa đơn phải có ít nhất 1 hàng hóa")
+        if not customer_data.get("full_name", "").strip():
+            raise ValueError("Họ tên khách hàng không được để trống")
+
+        created_at = invoice_data.get("created_at") or now_iso_utc7()
+        self.customer_repo.upsert_customer(customer_data)
+
+        payload = {
+            "invoice_no": invoice_no,
+            "created_at": created_at,
+            "customer_name": customer_data["full_name"],
+            "phone": customer_data.get("phone", ""),
+            "address": customer_data.get("address", ""),
+            "email": customer_data.get("email", ""),
+            "tax_code": customer_data.get("tax_code", ""),
+            "total_amount": int(invoice_data["total_amount"]),
+            "paid_amount": int(invoice_data.get("paid_amount", 0)),
+            "payment_date": invoice_data.get("payment_date", created_at),
+        }
+        self.invoice_repo.update_invoice(invoice_no, payload, sort_items_by_unit_price_desc(lines))
+
+    def delete_invoice(self, invoice_no: str) -> None:
+        self.invoice_repo.delete_invoice(invoice_no)
+
     def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str) -> None:
         detail = self.get_quotation_detail(quotation_id)
         if not detail:

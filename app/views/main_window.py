@@ -75,6 +75,7 @@ class MainWindow(QMainWindow):
         self.selected_product_code: str | None = None
         self._editing_quotation_id: int | None = None
         self._editing_quotation_export_path = ""
+        self._editing_invoice_no: str | None = None
         self._order_created_at_override: str | None = None
         self._suspend_product_search = False
         self._suspend_customer_search = False
@@ -734,9 +735,9 @@ class MainWindow(QMainWindow):
         self.invoice_suggestion_list.hide()
         invoice_layout.addWidget(self.invoice_suggestion_list)
 
-        self.invoice_table = QTableWidget(0, 6)
+        self.invoice_table = QTableWidget(0, 8)
         self.invoice_table.setHorizontalHeaderLabels(
-            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền", "Xem hóa đơn"]
+            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền", "Xem hóa đơn", "Sửa hóa đơn", "Xóa hóa đơn"]
         )
         self.invoice_table.verticalHeader().setVisible(False)
         self.invoice_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -749,6 +750,8 @@ class MainWindow(QMainWindow):
         invoice_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
         self.invoice_table.setMinimumHeight(202)
         invoice_layout.addWidget(self.invoice_table)
 
@@ -934,7 +937,95 @@ class MainWindow(QMainWindow):
                 lambda checked=False, invoice_no=invoice["invoice_no"]: self._open_invoice_preview(invoice_no)
             )
             self.invoice_table.setCellWidget(row, 5, view_btn)
+
+            edit_btn = QPushButton("Sửa hóa đơn")
+            edit_btn.setStyleSheet(
+                "QPushButton { background: #FEF9C3; color: #78350F; font-weight: 700; }"
+                "QPushButton:hover { background: #FDE68A; }"
+            )
+            edit_btn.clicked.connect(
+                lambda checked=False, invoice_no=invoice["invoice_no"]: self._edit_invoice_from_row(invoice_no)
+            )
+            self.invoice_table.setCellWidget(row, 6, edit_btn)
+
+            delete_btn = QPushButton("Xóa hóa đơn")
+            delete_btn.setStyleSheet(
+                "QPushButton { background: #FEE2E2; color: #7F1D1D; font-weight: 700; }"
+                "QPushButton:hover { background: #FECACA; }"
+            )
+            delete_btn.clicked.connect(
+                lambda checked=False, invoice_no=invoice["invoice_no"]: self._delete_invoice_from_row(invoice_no)
+            )
+            self.invoice_table.setCellWidget(row, 7, delete_btn)
         self.invoice_table.resizeRowsToContents()
+
+    def _edit_invoice_from_row(self, invoice_no: str) -> None:
+        if not PasswordDialog.verify(self, "Xác thực sửa hóa đơn"):
+            return
+
+        detail = self.order_controller.get_invoice_detail(invoice_no)
+        if not detail:
+            QMessageBox.warning(self, "Không tìm thấy", "Không lấy được chi tiết hóa đơn")
+            return
+
+        invoice = detail["invoice"]
+        items = detail["items"]
+
+        # Reset form rồi điền dữ liệu hóa đơn
+        self._reset_order_form()
+        self._set_invoice_editing_state(invoice_no)
+        self._order_created_at_override = str(invoice.get("created_at", "") or now_iso_utc7())
+
+        self._suspend_customer_search = True
+        self.order_name.setText(str(invoice.get("customer_name", "") or ""))
+        self.order_phone.setText(str(invoice.get("phone", "") or ""))
+        self.order_address.setText(str(invoice.get("address", "") or ""))
+        self.order_email.setText(str(invoice.get("email", "") or ""))
+        self.order_tax_code.setText(str(invoice.get("tax_code", "") or ""))
+        self._suspend_customer_search = False
+
+        self.customer_suggestion_list.clear()
+        self.customer_suggestion_list.hide()
+        self.invoice_lines = sort_items_by_unit_price_desc([
+            {
+                "product_code": str(item.get("product_code", "") or ""),
+                "product_name": str(item.get("product_name", "") or ""),
+                "category": str(item.get("category", "") or ""),
+                "unit": str(item.get("unit", "") or ""),
+                "quantity": int(item.get("quantity", 0) or 0),
+                "unit_price": int(item.get("unit_price", 0) or 0),
+                "line_total": int(item.get("line_total", 0) or 0),
+            }
+            for item in items
+        ])
+        self._render_invoice_lines()
+        self._update_invoice_totals()
+        self._reset_add_item_inputs()
+        self._switch_tab(0)
+        self._refresh_clock()
+
+    def _delete_invoice_from_row(self, invoice_no: str) -> None:
+        if not PasswordDialog.verify(self, "Xác thực xóa hóa đơn"):
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Xác nhận xóa hóa đơn",
+            f"Bạn có chắc chắn muốn xóa hóa đơn số {invoice_no}?\n"
+            "Toàn bộ thông tin hóa đơn và dữ liệu thanh toán sẽ bị xóa, tồn kho sẽ được hoàn lại.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+
+        try:
+            self.order_controller.delete_invoice(invoice_no)
+            self.refresh_products()
+            self.refresh_report()
+            QMessageBox.information(self, "Đã xóa", f"Hóa đơn {invoice_no} đã được xóa thành công")
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi", str(exc))
 
     def _open_invoice_preview(self, invoice_no: str) -> None:
         detail = self.order_controller.get_invoice_detail(invoice_no)
@@ -1424,8 +1515,16 @@ class MainWindow(QMainWindow):
         self.save_quote_btn.setText("Cập nhật bản báo giá")
         self.export_btn.setText("Xuất hóa đơn từ báo giá")
 
+    def _set_invoice_editing_state(self, invoice_no: str | None) -> None:
+        self._editing_invoice_no = invoice_no
+        if invoice_no is None:
+            self.export_btn.setText("Xuất hóa đơn")
+        else:
+            self.export_btn.setText(f"Cập nhật hóa đơn {invoice_no}")
+
     def _reset_order_form(self) -> None:
         self._set_order_editing_state(None)
+        self._editing_invoice_no = None
         self._order_created_at_override = None
         self.invoice_lines.clear()
         self._render_invoice_lines()
@@ -1664,6 +1763,11 @@ class MainWindow(QMainWindow):
             return False
 
     def _export_invoice(self) -> None:
+        # Chế độ cập nhật hóa đơn hiện có (từ sửa hóa đơn trong báo cáo)
+        if self._editing_invoice_no is not None:
+            self._confirm_update_invoice()
+            return
+
         try:
             invoice_no = self.order_controller.generate_invoice_no()
             customer_data, invoice_data, export_lines = self._build_order_document_data(invoice_no=invoice_no)
@@ -1697,6 +1801,41 @@ class MainWindow(QMainWindow):
             self.refresh_products()
             self.refresh_report()
         except Exception as exc:  # pragma: no cover - dialog feedback
+            QMessageBox.critical(self, "Lỗi", str(exc))
+
+    def _confirm_update_invoice(self) -> None:
+        invoice_no = self._editing_invoice_no
+        if not invoice_no:
+            return
+        try:
+            customer_data, invoice_data, export_lines = self._build_order_document_data(invoice_no=invoice_no)
+            if not self._show_document_preview(
+                invoice_data,
+                export_lines,
+                "invoice",
+                confirm_text=f"Cập nhật hóa đơn {invoice_no}",
+            ):
+                return
+
+            export_path = export_invoice_docx(
+                invoice_data,
+                export_lines,
+                self.invoice_export_dir,
+                document_kind="invoice",
+                output_name=build_invoice_output_name(invoice_no, customer_data.get("full_name", "")),
+            )
+            try:
+                self.order_controller.update_invoice(invoice_no, customer_data, invoice_data, export_lines)
+            except Exception:
+                self._remove_exported_file(export_path)
+                raise
+
+            self._warn_open_export_failure(export_path)
+            self._reset_order_form()
+            self.refresh_products()
+            self.refresh_report()
+            QMessageBox.information(self, "Thành công", f"Hóa đơn {invoice_no} đã được cập nhật")
+        except Exception as exc:
             QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_products(self) -> None:

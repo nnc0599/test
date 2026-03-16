@@ -1017,6 +1017,135 @@ class InvoiceRepository:
                 "items": [dict(row) for row in items],
             }
 
+    def update_invoice(self, invoice_no: str, payload: dict, lines: list[dict]) -> None:
+        """Cập nhật hóa đơn: hoàn kho cũ, trừ kho mới, cập nhật bảng invoices/invoice_items/payments."""
+        with get_connection() as conn:
+            existing = conn.execute(
+                "SELECT invoice_no FROM invoices WHERE invoice_no = ?",
+                (invoice_no,),
+            ).fetchone()
+            if not existing:
+                raise ValueError("Không tìm thấy hóa đơn cần cập nhật")
+
+            # Hoàn lại tồn kho của các mặt hàng cũ
+            old_items = conn.execute(
+                "SELECT product_code, quantity FROM invoice_items WHERE invoice_no = ?",
+                (invoice_no,),
+            ).fetchall()
+            for old_item in old_items:
+                conn.execute(
+                    "UPDATE products SET quantity = quantity + ? WHERE product_code = ?",
+                    (int(old_item["quantity"]), old_item["product_code"]),
+                )
+
+            # Xóa các dòng hàng hóa cũ (payments cũ cũng xóa luôn)
+            conn.execute("DELETE FROM invoice_items WHERE invoice_no = ?", (invoice_no,))
+            conn.execute("DELETE FROM payments WHERE invoice_no = ?", (invoice_no,))
+
+            # Cập nhật thông tin header hóa đơn
+            conn.execute(
+                """
+                UPDATE invoices
+                SET
+                    created_at = ?,
+                    customer_name = ?,
+                    phone = ?,
+                    email = ?,
+                    tax_code = ?,
+                    address = ?,
+                    total_amount = ?
+                WHERE invoice_no = ?
+                """,
+                (
+                    payload["created_at"],
+                    payload["customer_name"],
+                    payload.get("phone", ""),
+                    payload.get("email", ""),
+                    payload.get("tax_code", ""),
+                    payload.get("address", ""),
+                    int(payload["total_amount"]),
+                    invoice_no,
+                ),
+            )
+
+            # Chèn lại dòng hàng hóa mới và trừ kho
+            conn.executemany(
+                """
+                INSERT INTO invoice_items (
+                    invoice_no, product_code, product_name, unit, quantity, unit_price, line_total
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        invoice_no,
+                        line["product_code"],
+                        line["product_name"],
+                        line.get("unit", ""),
+                        int(line["quantity"]),
+                        int(line["unit_price"]),
+                        int(line["line_total"]),
+                    )
+                    for line in lines
+                ],
+            )
+            for line in lines:
+                cursor = conn.execute(
+                    """
+                    UPDATE products
+                    SET quantity = quantity - ?
+                    WHERE product_code = ? AND quantity >= ?
+                    """,
+                    (int(line["quantity"]), line["product_code"], int(line["quantity"])),
+                )
+                if cursor.rowcount == 0:
+                    raise ValueError(
+                        f"Sản phẩm {line['product_code']} không đủ số lượng để xuất kho."
+                    )
+
+            # Tạo lại bản ghi thanh toán
+            total = int(payload["total_amount"])
+            conn.execute(
+                """
+                INSERT INTO payments (
+                    invoice_no, customer_name, purchase_date, payment_date,
+                    total_amount, paid_amount, remaining_amount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    invoice_no,
+                    payload["customer_name"],
+                    payload["created_at"],
+                    payload.get("payment_date", payload["created_at"]),
+                    total,
+                    int(payload.get("paid_amount", 0)),
+                    total - int(payload.get("paid_amount", 0)),
+                ),
+            )
+
+    def delete_invoice(self, invoice_no: str) -> None:
+        """Xóa hóa đơn: hoàn kho đầy đủ rồi xóa bản ghi (CASCADE xóa invoice_items và payments)."""
+        with get_connection() as conn:
+            existing = conn.execute(
+                "SELECT invoice_no FROM invoices WHERE invoice_no = ?",
+                (invoice_no,),
+            ).fetchone()
+            if not existing:
+                raise ValueError("Không tìm thấy hóa đơn cần xóa")
+
+            # Hoàn lại tồn kho
+            old_items = conn.execute(
+                "SELECT product_code, quantity FROM invoice_items WHERE invoice_no = ?",
+                (invoice_no,),
+            ).fetchall()
+            for old_item in old_items:
+                conn.execute(
+                    "UPDATE products SET quantity = quantity + ? WHERE product_code = ?",
+                    (int(old_item["quantity"]), old_item["product_code"]),
+                )
+
+            # Xóa hóa đơn; invoice_items và payments tự xóa theo CASCADE
+            conn.execute("DELETE FROM invoices WHERE invoice_no = ?", (invoice_no,))
+
 
 class ReportRepository:
     @staticmethod
