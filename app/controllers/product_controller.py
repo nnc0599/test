@@ -11,6 +11,16 @@ from app.models.repositories import ProductRepository
 PRODUCT_IMPORT_HEADERS = [
     "Mã sản phẩm",
     "Tên sản phẩm",
+    "Phân loại",
+    "Đơn vị tính",
+    "Số lượng",
+    "Giá bán",
+    "Mô tả",
+]
+
+LEGACY_PRODUCT_IMPORT_HEADERS = [
+    "Mã sản phẩm",
+    "Tên sản phẩm",
     "Đơn vị tính",
     "Số lượng",
     "Giá bán",
@@ -55,17 +65,21 @@ class ProductController:
         try:
             sheet = workbook.active
 
-            header_row = [sheet[f"{column}1"].value for column in ["A", "B", "C", "D", "E", "F"]]
+            header_row = [sheet[f"{column}1"].value for column in ["A", "B", "C", "D", "E", "F", "G"]]
             normalized_headers = [str(value).strip() if value is not None else "" for value in header_row]
-            if normalized_headers != PRODUCT_IMPORT_HEADERS:
+            import_with_category = False
+            if normalized_headers == PRODUCT_IMPORT_HEADERS:
+                import_with_category = True
+            elif normalized_headers[:6] != LEGACY_PRODUCT_IMPORT_HEADERS:
                 raise ValueError("File không đúng biểu mẫu")
 
             products: list[dict] = []
             missing_code_count = 0
-            for row in sheet.iter_rows(min_row=2, max_col=6, values_only=True):
+            max_col = 7 if import_with_category else 6
+            for row in sheet.iter_rows(min_row=2, max_col=max_col, values_only=True):
                 if row is None:
                     continue
-                values = list(row) + [None] * (6 - len(row))
+                values = list(row) + [None] * (max_col - len(row))
                 if all(value is None or str(value).strip() == "" for value in values):
                     continue
 
@@ -78,11 +92,11 @@ class ProductController:
                     {
                         "product_code": product_code,
                         "name": self._as_text(values[1]),
-                        "category": "",
-                        "unit": self._as_text(values[2]),
-                        "quantity": self._as_int(values[3]),
-                        "sale_price": self._as_int(values[4]),
-                        "description": self._as_text(values[5]),
+                        "category": self._as_text(values[2]) if import_with_category else "",
+                        "unit": self._as_text(values[3] if import_with_category else values[2]),
+                        "quantity": self._as_int(values[4] if import_with_category else values[3]),
+                        "sale_price": self._as_int(values[5] if import_with_category else values[4]),
+                        "description": self._as_text(values[6] if import_with_category else values[5]),
                         "note": "",
                     }
                 )
@@ -105,6 +119,7 @@ class ProductController:
             sheet.append([
                 "SP001",
                 "Tên sản phẩm mẫu",
+                "Tấm pin",
                 "cái",
                 0,
                 0,
