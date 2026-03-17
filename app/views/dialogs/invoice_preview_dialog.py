@@ -30,7 +30,7 @@ class InvoicePreviewDialog(QDialog):
         variant = DOCUMENT_VARIANTS.get(document_kind, DOCUMENT_VARIANTS["invoice"])
         self.setWindowTitle(window_title or str(variant["window_title"]))
         self.setModal(True)
-        self.resize(1100, 900)
+        self.resize(1200, 700)
 
         self._confirmed = False
         self._show_confirm = show_confirm

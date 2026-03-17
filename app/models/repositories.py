@@ -806,17 +806,17 @@ class InvoiceRepository:
             items = conn.execute(
                 """
                 SELECT
-                    product_code,
-                    product_name,
+                    quotation_items.product_code,
+                    quotation_items.product_name,
                     COALESCE(products.category, '') AS category,
-                    unit,
-                    quantity,
-                    unit_price,
-                    line_total
+                    quotation_items.unit,
+                    quotation_items.quantity,
+                    quotation_items.unit_price,
+                    quotation_items.line_total
                 FROM quotation_items
                 LEFT JOIN products ON products.product_code = quotation_items.product_code
-                WHERE quotation_id = ?
-                ORDER BY unit_price DESC, line_total DESC, product_name COLLATE NOCASE ASC, id ASC
+                WHERE quotation_items.quotation_id = ?
+                ORDER BY quotation_items.unit_price DESC, quotation_items.line_total DESC, quotation_items.product_name COLLATE NOCASE ASC, quotation_items.id ASC
                 """,
                 (quotation_id,),
             ).fetchall()
@@ -856,17 +856,17 @@ class InvoiceRepository:
             items = conn.execute(
                 """
                 SELECT
-                    product_code,
-                    product_name,
+                    quotation_items.product_code,
+                    quotation_items.product_name,
                     COALESCE(products.category, '') AS category,
-                    unit,
-                    quantity,
-                    unit_price,
-                    line_total
+                    quotation_items.unit,
+                    quotation_items.quantity,
+                    quotation_items.unit_price,
+                    quotation_items.line_total
                 FROM quotation_items
                 LEFT JOIN products ON products.product_code = quotation_items.product_code
-                WHERE quotation_id = ?
-                ORDER BY unit_price DESC, line_total DESC, product_name COLLATE NOCASE ASC, id ASC
+                WHERE quotation_items.quotation_id = ?
+                ORDER BY quotation_items.unit_price DESC, quotation_items.line_total DESC, quotation_items.product_name COLLATE NOCASE ASC, quotation_items.id ASC
                 """,
                 (quotation_id,),
             ).fetchall()
