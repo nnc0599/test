@@ -24,6 +24,19 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = ROOT_DIR / "template.docx"
 EXPORT_DIR = ROOT_DIR / "data" / "exported_invoices"
 SCREEN_IMAGE_PATH = ROOT_DIR / "Screen.png"
+DEFAULT_SCREEN_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 180'>"
+    "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='0'>"
+    "<stop offset='0%' stop-color='#0F172A'/><stop offset='100%' stop-color='#1E293B'/>"
+    "</linearGradient></defs>"
+    "<rect width='1200' height='180' fill='url(#g)'/>"
+    "<rect x='28' y='24' width='1144' height='132' rx='12' fill='#FFFFFF' fill-opacity='0.08'/>"
+    "<text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle'"
+    " fill='#F8FAFC' font-family='Times New Roman' font-size='38' font-weight='700'>"
+    "INVOICE HEADER"
+    "</text>"
+    "</svg>"
+)
 
 DOCUMENT_VARIANTS = {
     "invoice": {
@@ -592,6 +605,98 @@ def _image_file_to_data_uri(path: Path) -> str:
     return f"data:{mime_type};base64,{encoded}"
 
 
+def _default_screen_image_data_uri() -> str:
+    encoded = base64.b64encode(DEFAULT_SCREEN_SVG.encode("utf-8")).decode("ascii")
+    return f"data:image/svg+xml;base64,{encoded}"
+
+
+def _resolve_screen_image_uri() -> str:
+    file_image = _image_file_to_data_uri(SCREEN_IMAGE_PATH)
+    if file_image:
+        return file_image
+    return _default_screen_image_data_uri()
+
+
+def _build_fallback_invoice_document() -> Document:
+    doc = Document()
+    _set_document_style(doc)
+
+    # Keep paragraph/table positions compatible with the existing export flow.
+    doc.add_paragraph("PHIẾU XUẤT KHO KIÊM BẢO HÀNH")
+    doc.add_paragraph("Ngày 01 tháng 01 năm 2000                                     Số: ")
+    doc.add_paragraph("Số: ")
+    doc.add_paragraph("Gmail: ")
+    doc.add_paragraph("Địa chỉ: ")
+    doc.add_paragraph("")
+    doc.add_paragraph("Số tiền viết bằng chữ:")
+
+    header_table = doc.add_table(rows=1, cols=3)
+    header_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    header_table.autofit = False
+    _set_table_no_borders(header_table)
+    _set_cell_text(header_table.cell(0, 0), "", alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    _set_cell_segments(
+        header_table.cell(0, 1),
+        [
+            ("CÔNG TY TNHH TM DV MẠNH QUÂN SOLAR\n", True, None),
+            ("MST: 3703124572\n", None, None),
+            ("Điện thoại: 0961868860", None, None),
+        ],
+        alignment=WD_ALIGN_PARAGRAPH.CENTER,
+    )
+    _set_cell_text(header_table.cell(0, 2), "Tài khoản", alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    _set_cell_width(header_table.cell(0, 0), 3.0)
+    _set_cell_width(header_table.cell(0, 1), 10.0)
+    _set_cell_width(header_table.cell(0, 2), 3.6)
+
+    items_table = doc.add_table(rows=3, cols=7)
+    items_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    items_table.autofit = False
+    _set_table_fixed_layout(items_table)
+    _set_table_grid_borders(items_table, color="111827", size="8")
+    _set_table_row_height(items_table, 0.7)
+
+    column_widths_cm = [0.85, 3.85, 6.42, 1.18, 1.04, 2.14, 2.63]
+    _set_table_grid(items_table, column_widths_cm)
+    _apply_column_widths(items_table.rows[0], column_widths_cm)
+    _apply_column_widths(items_table.rows[1], column_widths_cm)
+    _apply_column_widths(items_table.rows[2], column_widths_cm)
+
+    headers = ["TT", "Mã hàng", "Tên sản phẩm", "ĐV", "SL", "Đơn giá", "Thành tiền"]
+    for idx, text in enumerate(headers):
+        _set_cell_text(
+            items_table.rows[0].cells[idx],
+            text,
+            alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            bold=True,
+            vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER,
+        )
+
+    for idx in [0, 3, 4, 5, 6]:
+        _set_cell_text(
+            items_table.rows[1].cells[idx],
+            "",
+            alignment=WD_ALIGN_PARAGRAPH.CENTER,
+            vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.CENTER,
+        )
+
+    _set_cell_text(items_table.rows[2].cells[0], "Tổng thanh toán", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    _set_cell_text(items_table.rows[2].cells[6], "0", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+
+    signature_table = doc.add_table(rows=1, cols=4)
+    signature_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    signature_table.autofit = False
+    _set_table_no_borders(signature_table)
+    _set_cell_text(signature_table.cell(0, 0), "Khách hàng\n(Ký, họ tên)", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    _set_cell_text(signature_table.cell(0, 1), "Người lập phiếu\n(Ký, họ tên)", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    _set_cell_text(signature_table.cell(0, 2), "Thủ kho\n(Ký, họ tên)", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    _set_cell_text(signature_table.cell(0, 3), "Giám đốc\n(Ký, họ tên, đóng dấu)", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    for idx in range(4):
+        _set_cell_width(signature_table.cell(0, idx), 4.15)
+
+    return doc
+
+
 @lru_cache(maxsize=1)
 def _load_template_preview_assets() -> dict:
     page_margin_mm = {"top": 25.0, "right": 15.0, "bottom": 20.0, "left": 23.0}
@@ -644,7 +749,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
     reference_label = "Báo giá" if document_kind == "quotation" else "Số"
     reference_value = str(invoice.get("quotation_no") or invoice.get("invoice_no") or "")
     title_text = escape(str(variant["title"]))
-    screen_image_uri = _image_file_to_data_uri(SCREEN_IMAGE_PATH)
+    screen_image_uri = _resolve_screen_image_uri()
     header_html = (
         f"<div class=\"header-image-wrap\"><img class=\"header-image\" src=\"{screen_image_uri}\" /></div>"
         if screen_image_uri
@@ -909,13 +1014,14 @@ def export_invoice_docx(
     document_kind: str = "invoice",
     output_name: str | None = None,
 ) -> Path:
-    if not TEMPLATE_PATH.exists():
-        raise FileNotFoundError(f"Không tìm thấy mẫu hóa đơn: {TEMPLATE_PATH}")
     if not items:
         raise ValueError("Không có sản phẩm để xuất file hóa đơn")
     sorted_items = sort_items_by_unit_price_desc(items)
 
-    doc = Document(str(TEMPLATE_PATH))
+    if TEMPLATE_PATH.exists():
+        doc = Document(str(TEMPLATE_PATH))
+    else:
+        doc = _build_fallback_invoice_document()
     created_at = _parse_created_at(str(invoice.get("created_at", "")))
     invoice_no = str(invoice.get("invoice_no", "")).strip()
     variant = _document_variant(document_kind)
