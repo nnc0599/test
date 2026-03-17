@@ -3,3 +3,5 @@ __pycache__/
 data/*.db
 .tmp/
 data/exported_invoices/
+build/
+dist/

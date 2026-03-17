@@ -16,14 +16,15 @@ from docx.oxml.ns import qn
 from docx.shared import Cm
 from docx.shared import Pt
 
+from app.config import BUNDLE_ROOT, PROJECT_ROOT
 from app.utils.item_sort import sort_items_by_unit_price_desc
 from app.utils.time_utils import now_utc7
 
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-TEMPLATE_PATH = ROOT_DIR / "template.docx"
-EXPORT_DIR = ROOT_DIR / "data" / "exported_invoices"
-SCREEN_IMAGE_PATH = ROOT_DIR / "Screen.png"
+ROOT_DIR = PROJECT_ROOT
+TEMPLATE_PATH = BUNDLE_ROOT / "template.docx"
+EXPORT_DIR = PROJECT_ROOT / "data" / "exported_invoices"
+SCREEN_IMAGE_PATH = BUNDLE_ROOT / "Screen.png"
 
 DOCUMENT_VARIANTS = {
     "invoice": {
