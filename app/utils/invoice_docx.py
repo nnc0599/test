@@ -21,9 +21,9 @@ from app.utils.time_utils import now_utc7
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-TEMPLATE_PATH = ROOT_DIR / "template.docx"
+TEMPLATE_PATH = ROOT_DIR / "data" / "template.docx"
 EXPORT_DIR = ROOT_DIR / "data" / "exported_invoices"
-SCREEN_IMAGE_PATH = ROOT_DIR / "Screen.png"
+SCREEN_IMAGE_PATH = ROOT_DIR / "data" / "Screen.png"
 
 DOCUMENT_VARIANTS = {
     "invoice": {
