@@ -60,11 +60,11 @@ PRODUCT_LIST_ROW_HEIGHT_PX = 50
 
 
 PRICE_OPTION_META = {
-    "manual": {"tag": "Nhập tay", "color": "#475569", "tooltip": "Tự nhập đơn giá theo nhu cầu"},
+    "manual": {"tag": "Khác", "color": "#475569", "tooltip": "Tự nhập đơn giá theo nhu cầu"},
     "retail_price": {"tag": "Lẻ", "color": "#1D4ED8", "tooltip": "Giá bán lẻ"},
     "worker_price": {"tag": "Thợ", "color": "#B45309", "tooltip": "Giá dành cho thợ"},
     "dealer_price": {"tag": "Đại lý", "color": "#7C3AED", "tooltip": "Giá dành cho đại lý"},
-    "sale_price": {"tag": "Mặc định", "color": "#334155", "tooltip": "Giá mặc định từ dữ liệu cũ"},
+    "sale_price": {"tag": "Lẻ", "color": "#334155", "tooltip": "Giá lẻ từ dữ liệu cũ"},
 }
 
 
@@ -1318,7 +1318,7 @@ class MainWindow(QMainWindow):
     def _reset_order_price_options(self) -> None:
         self._suspend_price_option_sync = True
         self.order_price_type_combo.clear()
-        self.order_price_type_combo.addItem("Nhap tay", ("manual", 0))
+        self.order_price_type_combo.addItem("Khác", ("manual", 0))
         self._style_price_option_item(0, "manual", 0)
         self.order_price_type_combo.setCurrentIndex(0)
         self.order_price_type_combo.setEnabled(False)
@@ -1384,7 +1384,7 @@ class MainWindow(QMainWindow):
 
         self._suspend_price_option_sync = True
         self.order_price_type_combo.clear()
-        self.order_price_type_combo.addItem("Nhập tay", ("manual", 0))
+        self.order_price_type_combo.addItem("Khác", ("manual", 0))
         self._style_price_option_item(0, "manual", 0)
         for key, label, value in options:
             self.order_price_type_combo.addItem(self._build_price_option_text(key, label, value), (key, value))

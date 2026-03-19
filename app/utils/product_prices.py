@@ -85,7 +85,7 @@ def get_product_price_options(product: dict[str, Any] | None) -> list[tuple[str,
         return options
 
     fallback_price = prices["sale_price"]
-    return [("sale_price", "Giá mặc định", fallback_price)]
+    return [("sale_price", "Giá lẻ", fallback_price)]
 
 
 def build_product_price_lines(product: dict[str, Any] | None) -> list[str]:
