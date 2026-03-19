@@ -6,7 +6,15 @@ from typing import Iterable
 import re
 
 from app.database.connection import get_connection
+from app.utils.product_prices import apply_normalized_product_prices, get_stock_value_price
 from app.utils.time_utils import now_iso_utc7, today_utc7
+
+
+def _normalize_customer_price_group_value(value: str | None) -> str:
+    normalized = str(value or "auto").strip() or "auto"
+    if normalized == "custom_price":
+        return "retail_price"
+    return normalized
 
 
 def _period_bounds(period_type: str, period_value: str) -> tuple[str, str]:
@@ -71,15 +79,7 @@ class ProductRepository:
             """
             WITH prioritized_products AS (
                 SELECT
-                    product_code,
-                    name,
-                    category,
-                    unit,
-                    quantity,
-                    sale_price,
-                    updated_at,
-                    description,
-                    note,
+                    *,
                     0 AS priority
                 FROM products
                 WHERE product_code = ?
@@ -87,15 +87,7 @@ class ProductRepository:
                 UNION ALL
 
                 SELECT
-                    product_code,
-                    name,
-                    category,
-                    unit,
-                    quantity,
-                    sale_price,
-                    updated_at,
-                    description,
-                    note,
+                    *,
                     1 AS priority
                 FROM products
                 WHERE product_code >= ? AND product_code < ?
@@ -104,15 +96,7 @@ class ProductRepository:
                 UNION ALL
 
                 SELECT
-                    product_code,
-                    name,
-                    category,
-                    unit,
-                    quantity,
-                    sale_price,
-                    updated_at,
-                    description,
-                    note,
+                    *,
                     2 AS priority
                 FROM products
                 WHERE name >= ? COLLATE NOCASE AND name < ? COLLATE NOCASE
@@ -122,15 +106,7 @@ class ProductRepository:
                 UNION ALL
 
                 SELECT
-                    products.product_code,
-                    products.name,
-                    products.category,
-                    products.unit,
-                    products.quantity,
-                    products.sale_price,
-                    products.updated_at,
-                    products.description,
-                    products.note,
+                    products.*,
                     3 AS priority
                 FROM products_fts
                 INNER JOIN products ON products.rowid = products_fts.rowid
@@ -146,6 +122,9 @@ class ProductRepository:
                 unit,
                 quantity,
                 sale_price,
+                retail_price,
+                worker_price,
+                dealer_price,
                 updated_at,
                 description,
                 note
@@ -219,6 +198,9 @@ class ProductRepository:
                 unit,
                 quantity,
                 sale_price,
+                retail_price,
+                worker_price,
+                dealer_price,
                 updated_at,
                 description,
                 note
@@ -239,7 +221,7 @@ class ProductRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT product_code, name, category, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, category, unit, quantity, sale_price, retail_price, worker_price, dealer_price, updated_at, description, note
                 FROM products
                 ORDER BY updated_at DESC
                 """
@@ -250,7 +232,7 @@ class ProductRepository:
         with get_connection() as conn:
             row = conn.execute(
                 """
-                SELECT product_code, name, category, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, category, unit, quantity, sale_price, retail_price, worker_price, dealer_price, updated_at, description, note
                 FROM products
                 WHERE product_code = ?
                 """,
@@ -259,12 +241,13 @@ class ProductRepository:
             return dict(row) if row else None
 
     def add_product(self, payload: dict) -> None:
+        payload = apply_normalized_product_prices(payload)
         with get_connection() as conn:
             conn.execute(
                 """
                 INSERT INTO products (
-                    product_code, name, category, unit, quantity, sale_price, updated_at, description, note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    product_code, name, category, unit, quantity, sale_price, retail_price, worker_price, dealer_price, updated_at, description, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["product_code"],
@@ -273,6 +256,9 @@ class ProductRepository:
                     payload.get("unit", ""),
                     int(payload.get("quantity", 0)),
                     int(payload.get("sale_price", 0)),
+                    int(payload.get("retail_price", 0)),
+                    int(payload.get("worker_price", 0)),
+                    int(payload.get("dealer_price", 0)),
                     now_iso_utc7(),
                     payload.get("description", ""),
                     payload.get("note", ""),
@@ -280,6 +266,7 @@ class ProductRepository:
             )
 
     def add_products(self, payloads: list[dict]) -> None:
+        payloads = [apply_normalized_product_prices(payload) for payload in payloads]
         product_codes = [payload["product_code"].strip() for payload in payloads]
         duplicated_codes = sorted(
             code for code, count in Counter(product_codes).items() if code and count > 1
@@ -305,8 +292,8 @@ class ProductRepository:
             conn.executemany(
                 """
                 INSERT INTO products (
-                    product_code, name, category, unit, quantity, sale_price, updated_at, description, note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    product_code, name, category, unit, quantity, sale_price, retail_price, worker_price, dealer_price, updated_at, description, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -316,6 +303,9 @@ class ProductRepository:
                         payload.get("unit", ""),
                         int(payload.get("quantity", 0)),
                         int(payload.get("sale_price", 0)),
+                        int(payload.get("retail_price", 0)),
+                        int(payload.get("worker_price", 0)),
+                        int(payload.get("dealer_price", 0)),
                         current_time,
                         payload.get("description", ""),
                         payload.get("note", ""),
@@ -325,10 +315,11 @@ class ProductRepository:
             )
 
     def update_product(self, product_code: str, payload: dict) -> None:
+        payload = apply_normalized_product_prices(payload)
         with get_connection() as conn:
             existing = conn.execute(
                 """
-                SELECT product_code, name, category, unit, quantity, sale_price, updated_at, description, note
+                SELECT product_code, name, category, unit, quantity, sale_price, retail_price, worker_price, dealer_price, updated_at, description, note
                 FROM products
                 WHERE product_code = ?
                 """,
@@ -340,6 +331,9 @@ class ProductRepository:
             updated_at = now_iso_utc7()
             new_quantity = int(payload.get("quantity", 0))
             new_sale_price = int(payload.get("sale_price", 0))
+            new_retail_price = int(payload.get("retail_price", 0))
+            new_worker_price = int(payload.get("worker_price", 0))
+            new_dealer_price = int(payload.get("dealer_price", 0))
             conn.execute(
                 """
                 UPDATE products
@@ -349,6 +343,9 @@ class ProductRepository:
                     unit = ?,
                     quantity = ?,
                     sale_price = ?,
+                    retail_price = ?,
+                    worker_price = ?,
+                    dealer_price = ?,
                     updated_at = ?,
                     description = ?,
                     note = ?
@@ -360,6 +357,9 @@ class ProductRepository:
                     payload.get("unit", ""),
                     new_quantity,
                     new_sale_price,
+                    new_retail_price,
+                    new_worker_price,
+                    new_dealer_price,
                     updated_at,
                     payload.get("description", ""),
                     payload["note"],
@@ -368,13 +368,21 @@ class ProductRepository:
             )
 
             quantity_changed = int(existing["quantity"]) != new_quantity
-            price_changed = int(existing["sale_price"]) != new_sale_price
+            price_changed = any(
+                int(existing[field]) != new_value
+                for field, new_value in (
+                    ("sale_price", new_sale_price),
+                    ("retail_price", new_retail_price),
+                    ("worker_price", new_worker_price),
+                    ("dealer_price", new_dealer_price),
+                )
+            )
             if quantity_changed or price_changed:
                 conn.execute(
                     """
                     INSERT INTO product_update_history (
-                        product_code, name, unit, quantity, sale_price, description, note, changed_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        product_code, name, unit, quantity, sale_price, retail_price, worker_price, dealer_price, description, note, changed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         product_code,
@@ -382,6 +390,9 @@ class ProductRepository:
                         payload.get("unit", ""),
                         new_quantity,
                         new_sale_price,
+                        new_retail_price,
+                        new_worker_price,
+                        new_dealer_price,
                         payload.get("description", ""),
                         payload["note"],
                         updated_at,
@@ -398,6 +409,9 @@ class ProductRepository:
                     unit,
                     quantity,
                     sale_price,
+                    retail_price,
+                    worker_price,
+                    dealer_price,
                     description,
                     note,
                     changed_at
@@ -471,6 +485,7 @@ class CustomerRepository:
     def upsert_customer(self, payload: dict) -> None:
         with get_connection() as conn:
             phone = payload.get("phone", "").strip()
+            customer_price_group = _normalize_customer_price_group_value(payload.get("customer_price_group"))
             exists = None
             if phone:
                 exists = conn.execute(
@@ -481,7 +496,7 @@ class CustomerRepository:
                 conn.execute(
                     """
                     UPDATE customers
-                    SET full_name = ?, phone = ?, email = ?, tax_code = ?, address = ?, note = ?
+                    SET full_name = ?, phone = ?, email = ?, tax_code = ?, address = ?, customer_price_group = ?, note = ?
                     WHERE id = ?
                     """,
                     (
@@ -490,6 +505,7 @@ class CustomerRepository:
                         payload.get("email", ""),
                         payload.get("tax_code", ""),
                         payload.get("address", ""),
+                        customer_price_group,
                         payload.get("note", ""),
                         exists["id"],
                     ),
@@ -497,8 +513,8 @@ class CustomerRepository:
             else:
                 conn.execute(
                     """
-                    INSERT INTO customers (full_name, phone, email, tax_code, address, note)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO customers (full_name, phone, email, tax_code, address, customer_price_group, note)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         payload["full_name"],
@@ -506,6 +522,7 @@ class CustomerRepository:
                         payload.get("email", ""),
                         payload.get("tax_code", ""),
                         payload.get("address", ""),
+                        customer_price_group,
                         payload.get("note", ""),
                     ),
                 )
@@ -514,20 +531,23 @@ class CustomerRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT full_name, phone, email, tax_code, address, note
+                SELECT full_name, phone, email, tax_code, address, customer_price_group, note
                 FROM customers
                 ORDER BY id DESC
                 LIMIT 200
                 """
             ).fetchall()
-            return [dict(row) for row in rows]
+            customers = [dict(row) for row in rows]
+            for customer in customers:
+                customer["customer_price_group"] = _normalize_customer_price_group_value(customer.get("customer_price_group"))
+            return customers
 
     def search_customers(self, keyword: str) -> list[dict]:
         like_kw = f"%{keyword.strip()}%"
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT full_name, phone, email, tax_code, address, note
+                SELECT full_name, phone, email, tax_code, address, customer_price_group, note
                 FROM customers
                 WHERE full_name LIKE ? OR phone LIKE ? OR email LIKE ? OR tax_code LIKE ? OR address LIKE ?
                 ORDER BY id DESC
@@ -535,7 +555,10 @@ class CustomerRepository:
                 """,
                 (like_kw, like_kw, like_kw, like_kw, like_kw),
             ).fetchall()
-            return [dict(row) for row in rows]
+            customers = [dict(row) for row in rows]
+            for customer in customers:
+                customer["customer_price_group"] = _normalize_customer_price_group_value(customer.get("customer_price_group"))
+            return customers
 
 
 class InvoiceRepository:
@@ -1242,4 +1265,7 @@ class ReportRepository:
                 ORDER BY name COLLATE NOCASE ASC, product_code ASC
                 """
             ).fetchall()
-            return [dict(row) for row in rows]
+            products = [dict(row) for row in rows]
+            for product in products:
+                product["sale_price"] = get_stock_value_price(product)
+            return products

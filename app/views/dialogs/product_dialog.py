@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.config import PRODUCT_CATEGORIES
+from app.utils.product_prices import normalize_product_prices
 from app.utils.time_utils import now_iso_utc7
 from app.views.dialogs import disable_minimize_button
 
@@ -64,8 +65,12 @@ class ProductFormDialog(QDialog):
         self.quantity_spin = QSpinBox()
         self.quantity_spin.setRange(0, 1_000_000_000)
 
-        self.price_spin = QSpinBox()
-        self.price_spin.setRange(0, 2_000_000_000)
+        self.retail_price_spin = QSpinBox()
+        self.retail_price_spin.setRange(0, 2_000_000_000)
+        self.worker_price_spin = QSpinBox()
+        self.worker_price_spin.setRange(0, 2_000_000_000)
+        self.dealer_price_spin = QSpinBox()
+        self.dealer_price_spin.setRange(0, 2_000_000_000)
 
         self.description_edit = QPlainTextEdit(self)
         self.description_edit.setPlaceholderText("Nhập mô tả chi tiết")
@@ -88,11 +93,16 @@ class ProductFormDialog(QDialog):
 
         top_grid.addWidget(QLabel("Số lượng"), 2, 0)
         top_grid.addWidget(self.quantity_spin, 2, 1)
-        top_grid.addWidget(QLabel("Giá bán"), 2, 2)
-        top_grid.addWidget(self.price_spin, 2, 3)
+        top_grid.addWidget(QLabel("Giá lẻ"), 2, 2)
+        top_grid.addWidget(self.retail_price_spin, 2, 3)
 
-        top_grid.addWidget(QLabel("Ngày cập nhật"), 3, 0)
-        top_grid.addWidget(self.updated_at_value, 3, 1, 1, 3)
+        top_grid.addWidget(QLabel("Giá thợ"), 3, 0)
+        top_grid.addWidget(self.worker_price_spin, 3, 1)
+        top_grid.addWidget(QLabel("Giá đại lý"), 3, 2)
+        top_grid.addWidget(self.dealer_price_spin, 3, 3)
+
+        top_grid.addWidget(QLabel("Ngày cập nhật"), 4, 0)
+        top_grid.addWidget(self.updated_at_value, 4, 1, 1, 3)
 
         product_box = QGroupBox()
         product_box.setLayout(top_grid)
@@ -152,7 +162,10 @@ class ProductFormDialog(QDialog):
         self.category_combo.setCurrentIndex(category_index if category_index >= 0 else 0)
         self.unit_edit.setText(self.initial.get("unit", ""))
         self.quantity_spin.setValue(int(self.initial.get("quantity", 0)))
-        self.price_spin.setValue(int(self.initial.get("sale_price", 0)))
+        prices = normalize_product_prices(self.initial)
+        self.retail_price_spin.setValue(prices["retail_price"])
+        self.worker_price_spin.setValue(prices["worker_price"])
+        self.dealer_price_spin.setValue(prices["dealer_price"])
         self.description_edit.setPlainText(self.initial.get("description", ""))
         self.note_edit.setPlainText(self.initial.get("note", ""))
         self.updated_at_value.setText(self.initial.get("updated_at", now_iso_utc7()))
@@ -178,7 +191,9 @@ class ProductFormDialog(QDialog):
             "category": str(self.category_combo.currentData() or "").strip(),
             "unit": self.unit_edit.text().strip(),
             "quantity": self.quantity_spin.value(),
-            "sale_price": self.price_spin.value(),
+            "retail_price": self.retail_price_spin.value(),
+            "worker_price": self.worker_price_spin.value(),
+            "dealer_price": self.dealer_price_spin.value(),
             "description": self.description_edit.toPlainText().strip(),
             "note": self.note_edit.toPlainText().strip(),
         }

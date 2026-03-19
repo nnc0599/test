@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS products (
     unit TEXT,
     quantity INTEGER NOT NULL DEFAULT 0,
     sale_price INTEGER NOT NULL DEFAULT 0,
+    retail_price INTEGER NOT NULL DEFAULT 0,
+    worker_price INTEGER NOT NULL DEFAULT 0,
+    dealer_price INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL,
     description TEXT,
     note TEXT
@@ -24,6 +27,7 @@ CREATE TABLE IF NOT EXISTS customers (
     email TEXT,
     tax_code TEXT,
     address TEXT,
+    customer_price_group TEXT NOT NULL DEFAULT 'auto',
     note TEXT
 );
 
@@ -97,6 +101,9 @@ CREATE TABLE IF NOT EXISTS product_update_history (
     unit TEXT,
     quantity INTEGER NOT NULL,
     sale_price INTEGER NOT NULL,
+    retail_price INTEGER NOT NULL DEFAULT 0,
+    worker_price INTEGER NOT NULL DEFAULT 0,
+    dealer_price INTEGER NOT NULL DEFAULT 0,
     description TEXT,
     note TEXT,
     changed_at TEXT NOT NULL,
@@ -184,6 +191,9 @@ REQUIRED_TABLE_COLUMNS = {
         "unit": "TEXT",
         "quantity": "INTEGER NOT NULL DEFAULT 0",
         "sale_price": "INTEGER NOT NULL DEFAULT 0",
+        "retail_price": "INTEGER NOT NULL DEFAULT 0",
+        "worker_price": "INTEGER NOT NULL DEFAULT 0",
+        "dealer_price": "INTEGER NOT NULL DEFAULT 0",
         "updated_at": "TEXT NOT NULL",
         "description": "TEXT",
         "note": "TEXT",
@@ -195,6 +205,7 @@ REQUIRED_TABLE_COLUMNS = {
         "email": "TEXT",
         "tax_code": "TEXT",
         "address": "TEXT",
+        "customer_price_group": "TEXT NOT NULL DEFAULT 'auto'",
         "note": "TEXT",
     },
     "invoices": {
@@ -259,6 +270,9 @@ REQUIRED_TABLE_COLUMNS = {
         "unit": "TEXT",
         "quantity": "INTEGER NOT NULL",
         "sale_price": "INTEGER NOT NULL",
+        "retail_price": "INTEGER NOT NULL DEFAULT 0",
+        "worker_price": "INTEGER NOT NULL DEFAULT 0",
+        "dealer_price": "INTEGER NOT NULL DEFAULT 0",
         "description": "TEXT",
         "note": "TEXT",
         "changed_at": "TEXT NOT NULL",
@@ -280,6 +294,204 @@ def _ensure_missing_columns(conn) -> None:
             conn.execute(
                 f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
             )
+
+
+def _backfill_product_price_columns(conn) -> None:
+    product_columns = set(_table_columns(conn, "products"))
+    history_columns = set(_table_columns(conn, "product_update_history"))
+    product_custom_expr = "COALESCE(custom_price, 0)" if "custom_price" in product_columns else "0"
+    history_custom_expr = "COALESCE(custom_price, 0)" if "custom_price" in history_columns else "0"
+
+    conn.execute(
+        f"""
+        UPDATE products
+        SET
+            retail_price = CASE
+                WHEN COALESCE(retail_price, 0) = 0 AND COALESCE(sale_price, 0) > 0 THEN sale_price
+                WHEN COALESCE(retail_price, 0) = 0 AND {product_custom_expr} > 0 THEN {product_custom_expr}
+                ELSE COALESCE(retail_price, 0)
+            END,
+            worker_price = COALESCE(worker_price, 0),
+            dealer_price = COALESCE(dealer_price, 0)
+        """
+    )
+    conn.execute(
+        f"""
+        UPDATE products
+        SET sale_price = CASE
+            WHEN COALESCE(retail_price, 0) > 0 THEN retail_price
+            WHEN COALESCE(worker_price, 0) > 0 THEN worker_price
+            WHEN COALESCE(dealer_price, 0) > 0 THEN dealer_price
+            WHEN {product_custom_expr} > 0 THEN {product_custom_expr}
+            ELSE COALESCE(sale_price, 0)
+        END
+        """
+    )
+
+    conn.execute(
+        f"""
+        UPDATE product_update_history
+        SET
+            retail_price = CASE
+                WHEN COALESCE(retail_price, 0) = 0 AND COALESCE(sale_price, 0) > 0 THEN sale_price
+                WHEN COALESCE(retail_price, 0) = 0 AND {history_custom_expr} > 0 THEN {history_custom_expr}
+                ELSE COALESCE(retail_price, 0)
+            END,
+            worker_price = COALESCE(worker_price, 0),
+            dealer_price = COALESCE(dealer_price, 0)
+        """
+    )
+    conn.execute(
+        f"""
+        UPDATE product_update_history
+        SET sale_price = CASE
+            WHEN COALESCE(retail_price, 0) > 0 THEN retail_price
+            WHEN COALESCE(worker_price, 0) > 0 THEN worker_price
+            WHEN COALESCE(dealer_price, 0) > 0 THEN dealer_price
+            WHEN {history_custom_expr} > 0 THEN {history_custom_expr}
+            ELSE COALESCE(sale_price, 0)
+        END
+        """
+    )
+
+
+def _normalize_customer_price_groups(conn) -> None:
+    if "customer_price_group" not in set(_table_columns(conn, "customers")):
+        return
+    conn.execute(
+        """
+        UPDATE customers
+        SET customer_price_group = 'retail_price'
+        WHERE customer_price_group = 'custom_price'
+        """
+    )
+
+
+def _drop_products_fts(conn) -> None:
+    conn.executescript(
+        """
+        DROP TRIGGER IF EXISTS products_fts_ai;
+        DROP TRIGGER IF EXISTS products_fts_ad;
+        DROP TRIGGER IF EXISTS products_fts_au;
+        DROP TABLE IF EXISTS products_fts;
+        """
+    )
+
+
+def _rebuild_products_without_custom_price(conn) -> None:
+    if "custom_price" not in set(_table_columns(conn, "products")):
+        return
+
+    _drop_products_fts(conn)
+    conn.execute("ALTER TABLE products RENAME TO products_old")
+    conn.execute(
+        """
+        CREATE TABLE products (
+            product_code TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT,
+            unit TEXT,
+            quantity INTEGER NOT NULL DEFAULT 0,
+            sale_price INTEGER NOT NULL DEFAULT 0,
+            retail_price INTEGER NOT NULL DEFAULT 0,
+            worker_price INTEGER NOT NULL DEFAULT 0,
+            dealer_price INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            description TEXT,
+            note TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO products (
+            product_code, name, category, unit, quantity, sale_price, retail_price, worker_price, dealer_price, updated_at, description, note
+        )
+        SELECT
+            product_code,
+            name,
+            category,
+            unit,
+            quantity,
+            CASE
+                WHEN COALESCE(retail_price, 0) > 0 THEN retail_price
+                WHEN COALESCE(worker_price, 0) > 0 THEN worker_price
+                WHEN COALESCE(dealer_price, 0) > 0 THEN dealer_price
+                WHEN COALESCE(custom_price, 0) > 0 THEN custom_price
+                ELSE COALESCE(sale_price, 0)
+            END,
+            CASE
+                WHEN COALESCE(retail_price, 0) > 0 THEN retail_price
+                WHEN COALESCE(custom_price, 0) > 0 THEN custom_price
+                ELSE COALESCE(sale_price, 0)
+            END,
+            COALESCE(worker_price, 0),
+            COALESCE(dealer_price, 0),
+            updated_at,
+            description,
+            note
+        FROM products_old
+        """
+    )
+    conn.execute("DROP TABLE products_old")
+
+
+def _rebuild_product_update_history_without_custom_price(conn) -> None:
+    if "custom_price" not in set(_table_columns(conn, "product_update_history")):
+        return
+
+    conn.execute("ALTER TABLE product_update_history RENAME TO product_update_history_old")
+    conn.execute(
+        """
+        CREATE TABLE product_update_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            unit TEXT,
+            quantity INTEGER NOT NULL,
+            sale_price INTEGER NOT NULL,
+            retail_price INTEGER NOT NULL DEFAULT 0,
+            worker_price INTEGER NOT NULL DEFAULT 0,
+            dealer_price INTEGER NOT NULL DEFAULT 0,
+            description TEXT,
+            note TEXT,
+            changed_at TEXT NOT NULL,
+            FOREIGN KEY (product_code) REFERENCES products(product_code) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO product_update_history (
+            id, product_code, name, unit, quantity, sale_price, retail_price, worker_price, dealer_price, description, note, changed_at
+        )
+        SELECT
+            id,
+            product_code,
+            name,
+            unit,
+            quantity,
+            CASE
+                WHEN COALESCE(retail_price, 0) > 0 THEN retail_price
+                WHEN COALESCE(worker_price, 0) > 0 THEN worker_price
+                WHEN COALESCE(dealer_price, 0) > 0 THEN dealer_price
+                WHEN COALESCE(custom_price, 0) > 0 THEN custom_price
+                ELSE COALESCE(sale_price, 0)
+            END,
+            CASE
+                WHEN COALESCE(retail_price, 0) > 0 THEN retail_price
+                WHEN COALESCE(custom_price, 0) > 0 THEN custom_price
+                ELSE COALESCE(sale_price, 0)
+            END,
+            COALESCE(worker_price, 0),
+            COALESCE(dealer_price, 0),
+            description,
+            note,
+            changed_at
+        FROM product_update_history_old
+        """
+    )
+    conn.execute("DROP TABLE product_update_history_old")
 
 
 def _invoice_items_has_product_fk(conn) -> bool:
@@ -338,7 +550,11 @@ def init_schema() -> None:
     with get_connection() as conn:
         conn.executescript(SCHEMA_SQL)
         _ensure_missing_columns(conn)
+        _backfill_product_price_columns(conn)
         _migrate_invoice_items_without_product_fk(conn)
+        _normalize_customer_price_groups(conn)
+        _rebuild_products_without_custom_price(conn)
+        _rebuild_product_update_history_without_custom_price(conn)
         conn.executescript(INDEX_SQL)
         _ensure_products_fts(conn)
 
@@ -358,17 +574,17 @@ def seed_sample_products() -> None:
                 conn.execute(
                     """
                     UPDATE products
-                    SET name = ?, category = ?, unit = ?, quantity = ?, sale_price = ?, updated_at = ?, description = ?, note = ?
+                    SET name = ?, category = ?, unit = ?, quantity = ?, sale_price = ?, retail_price = ?, worker_price = ?, dealer_price = ?, updated_at = ?, description = ?, note = ?
                     WHERE product_code = ?
                     """,
-                    (row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[0]),
+                    (row[1], row[2], row[3], row[4], row[5], row[5], 0, 0, row[6], row[7], row[8], row[0]),
                 )
             else:
                 conn.execute(
                     """
                     INSERT INTO products (
-                        product_code, name, category, unit, quantity, sale_price, updated_at, description, note
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        product_code, name, category, unit, quantity, sale_price, retail_price, worker_price, dealer_price, updated_at, description, note
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    row,
+                    (row[0], row[1], row[2], row[3], row[4], row[5], row[5], 0, 0, row[6], row[7], row[8]),
                 )

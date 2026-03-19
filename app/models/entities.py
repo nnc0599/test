@@ -9,6 +9,9 @@ class Product:
     unit: str
     quantity: int
     sale_price: int
+    retail_price: int
+    worker_price: int
+    dealer_price: int
     updated_at: str
     description: str
     note: str
@@ -21,6 +24,7 @@ class Customer:
     email: str
     tax_code: str
     address: str
+    customer_price_group: str
     note: str
 
 

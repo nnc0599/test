@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.utils.product_prices import format_product_price_summary
 from app.views.dialogs import disable_minimize_button
 
 
@@ -36,7 +37,9 @@ class ProductHistoryDialog(QDialog):
         product_form.addRow("Tên sản phẩm", QLabel(product.get("name", "")))
         product_form.addRow("Đơn vị tính", QLabel(product.get("unit", "")))
         product_form.addRow("Số lượng", QLabel(str(product.get("quantity", 0))))
-        product_form.addRow("Giá bán", QLabel(format_money(int(product.get("sale_price", 0)))))
+        current_price_label = QLabel(format_product_price_summary(product))
+        current_price_label.setWordWrap(True)
+        product_form.addRow("Bảng giá", current_price_label)
         product_form.addRow("Mô tả", QLabel(product.get("description", "")))
         product_form.addRow("Ghi chú hiện tại", QLabel(product.get("note", "")))
         product_form.addRow("Ngày cập nhật", QLabel(product.get("updated_at", "")))
@@ -79,7 +82,7 @@ class ProductHistoryDialog(QDialog):
                 item.get("name", ""),
                 item.get("unit", ""),
                 str(item.get("quantity", 0)),
-                format_money(int(item.get("sale_price", 0))),
+                format_product_price_summary(item),
                 item.get("description", ""),
                 item.get("note", ""),
             ]

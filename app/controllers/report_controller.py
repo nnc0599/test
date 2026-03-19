@@ -1,4 +1,5 @@
 from app.models.repositories import ReportRepository
+from app.utils.product_prices import get_stock_value_price
 from app.utils.item_sort import sort_products_by_category_priority
 
 
@@ -29,5 +30,5 @@ class ReportController:
             "rows": rows,
             "product_count": len(rows),
             "total_quantity": sum(int(item["quantity"]) for item in rows),
-            "total_value": sum(int(item["quantity"]) * int(item["sale_price"]) for item in rows),
+            "total_value": sum(int(item["quantity"]) * get_stock_value_price(item) for item in rows),
         }

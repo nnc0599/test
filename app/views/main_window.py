@@ -5,7 +5,7 @@ from typing import Any
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QEvent, QEasingCurve, QPropertyAnimation, QSettings, Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics
+from PySide6.QtGui import QBrush, QColor, QDesktopServices, QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -38,6 +38,7 @@ from app.controllers.order_controller import OrderController
 from app.controllers.product_controller import ProductController
 from app.controllers.report_controller import ReportController
 from app.utils.invoice_docx import EXPORT_DIR
+from app.utils.product_prices import build_product_price_lines, format_product_price_summary, get_default_order_price, get_product_price_options, get_stock_value_price
 from app.utils.time_utils import now_iso_utc7
 from app.utils.invoice_docx import build_invoice_output_name, build_quotation_output_name, export_invoice_docx, export_report_docx
 from app.utils.item_sort import sort_items_by_unit_price_desc, sort_products_by_category_priority
@@ -56,6 +57,26 @@ def format_money(value: int) -> str:
 
 LIST_ROW_HEIGHT_PX = 35
 PRODUCT_LIST_ROW_HEIGHT_PX = 50
+
+
+PRICE_OPTION_META = {
+    "manual": {"tag": "Nhập tay", "color": "#475569", "tooltip": "Tự nhập đơn giá theo nhu cầu"},
+    "retail_price": {"tag": "Lẻ", "color": "#1D4ED8", "tooltip": "Giá bán lẻ"},
+    "worker_price": {"tag": "Thợ", "color": "#B45309", "tooltip": "Giá dành cho thợ"},
+    "dealer_price": {"tag": "Đại lý", "color": "#7C3AED", "tooltip": "Giá dành cho đại lý"},
+    "sale_price": {"tag": "Mặc định", "color": "#334155", "tooltip": "Giá mặc định từ dữ liệu cũ"},
+}
+
+
+CUSTOMER_PRICE_GROUPS = [
+    ("auto", "Tự động theo sản phẩm"),
+    ("retail_price", "Khách lẻ"),
+    ("worker_price", "Khách thợ"),
+    ("dealer_price", "Khách đại lý"),
+]
+
+
+CUSTOMER_PRICE_GROUP_LABELS = dict(CUSTOMER_PRICE_GROUPS)
 
 
 class MainWindow(QMainWindow):
@@ -79,11 +100,20 @@ class MainWindow(QMainWindow):
         self._order_created_at_override: str | None = None
         self._suspend_product_search = False
         self._suspend_customer_search = False
+        self._suspend_price_option_sync = False
+        self._preferred_price_option_by_product_code: dict[str, str] = {}
+        self._settings = QSettings("nnc0599", "PhanMemBanHang")
+        self._selected_customer_price_group = self._settings.value(
+            "selected_customer_price_group",
+            "auto",
+            type=str,
+        )
+        if self._selected_customer_price_group == "custom_price":
+            self._selected_customer_price_group = "retail_price"
         self._selected_product_stock = 0
         self._products_loaded = False
         self._report_loaded = False
         self._suspend_report_refresh = True
-        self._settings = QSettings("nnc0599", "PhanMemBanHang")
         self.invoice_export_dir = self._load_invoice_export_dir()
 
         self.setWindowTitle("Phần mềm bán hàng")
@@ -243,6 +273,7 @@ class MainWindow(QMainWindow):
         self.order_address = QLineEdit()
         self.order_email = QLineEdit()
         self.order_tax_code = QLineEdit()
+        self.customer_price_group_combo = QComboBox()
         self.customer_suggestion_list = QListWidget()
         self.customer_suggestion_list.setAlternatingRowColors(True)
         self.customer_suggestion_list.setMaximumHeight(120)
@@ -255,9 +286,16 @@ class MainWindow(QMainWindow):
             self.order_address,
             self.order_email,
             self.order_tax_code,
+            self.customer_price_group_combo,
         ]:
             widget.setStyleSheet(compact_input_style)
             widget.setMinimumHeight(28)
+
+        for group_key, group_label in CUSTOMER_PRICE_GROUPS:
+            self.customer_price_group_combo.addItem(group_label, group_key)
+        self.customer_price_group_combo.setToolTip("Chọn nhóm khách hàng để ưu tiên mức giá phù hợp khi thêm sản phẩm")
+        selected_group_index = self.customer_price_group_combo.findData(self._selected_customer_price_group)
+        self.customer_price_group_combo.setCurrentIndex(selected_group_index if selected_group_index >= 0 else 0)
 
         customer_grid.addWidget(QLabel("Nhập họ tên"), 0, 0)
         customer_grid.addWidget(self.order_name, 0, 1)
@@ -272,7 +310,9 @@ class MainWindow(QMainWindow):
         customer_grid.addWidget(self.order_email, 1, 3)
         customer_grid.addWidget(QLabel("Mã số thuế"), 1, 4)
         customer_grid.addWidget(self.order_tax_code, 1, 5)
-        customer_grid.addWidget(self.customer_suggestion_list, 2, 1, 1, 5)
+        customer_grid.addWidget(QLabel("Nhóm khách"), 2, 0)
+        customer_grid.addWidget(self.customer_price_group_combo, 2, 1)
+        customer_grid.addWidget(self.customer_suggestion_list, 3, 1, 1, 5)
 
         customer_grid.setColumnStretch(1, 3)
         customer_grid.setColumnStretch(3, 2)
@@ -300,6 +340,7 @@ class MainWindow(QMainWindow):
 
         self.order_qty_spin = QSpinBox()
         self.order_qty_spin.setRange(1, 1_000_000_000)
+        self.order_price_type_combo = QComboBox()
         self.order_price_spin = QSpinBox()
         self.order_price_spin.setRange(0, 2_000_000_000)
 
@@ -308,6 +349,8 @@ class MainWindow(QMainWindow):
         self.search_product_edit.setMinimumHeight(28)
         self.order_qty_spin.setStyleSheet(compact_input_style)
         self.order_qty_spin.setMinimumHeight(28)
+        self.order_price_type_combo.setStyleSheet(compact_input_style)
+        self.order_price_type_combo.setMinimumHeight(28)
         self.order_price_spin.setStyleSheet(compact_input_style)
         self.order_price_spin.setMinimumHeight(28)
         self.add_line_btn.setStyleSheet("padding: 4px 10px;")
@@ -318,10 +361,12 @@ class MainWindow(QMainWindow):
         add_grid.addWidget(self.search_product_edit, 0, 1, 1, 3)
         add_grid.addWidget(QLabel("Số lượng"), 0, 4)
         add_grid.addWidget(self.order_qty_spin, 0, 5)
-        add_grid.addWidget(QLabel("Đơn giá"), 0, 6)
-        add_grid.addWidget(self.order_price_spin, 0, 7)
-        add_grid.addWidget(self.add_line_btn, 0, 8)
-        add_grid.addWidget(self.search_product_list, 1, 0, 1, 9)
+        add_grid.addWidget(QLabel("Mức giá"), 0, 6)
+        add_grid.addWidget(self.order_price_type_combo, 0, 7)
+        add_grid.addWidget(QLabel("Đơn giá"), 0, 8)
+        add_grid.addWidget(self.order_price_spin, 0, 9)
+        add_grid.addWidget(self.add_line_btn, 0, 10)
+        add_grid.addWidget(self.search_product_list, 1, 0, 1, 11)
 
         self.add_item_box = add_item_box
         self.add_grid = add_grid
@@ -448,11 +493,16 @@ class MainWindow(QMainWindow):
         self.search_product_edit.textChanged.connect(self._refresh_product_suggestions)
         self.search_product_edit.returnPressed.connect(self._pick_product_from_input)
         self.search_product_list.itemClicked.connect(self._on_product_suggestion_clicked)
+        self.customer_price_group_combo.currentIndexChanged.connect(self._on_customer_price_group_changed)
+        self.order_price_type_combo.currentIndexChanged.connect(self._apply_selected_price_option)
+        self.order_price_spin.valueChanged.connect(self._sync_order_price_option_from_value)
         self.order_name.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.order_phone.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.order_email.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.order_tax_code.textChanged.connect(self._refresh_customer_suggestions_from_inputs)
         self.customer_suggestion_list.itemClicked.connect(self._on_customer_suggestion_clicked)
+
+        self._reset_order_price_options()
 
         self._sync_order_table_widths()
 
@@ -539,7 +589,7 @@ class MainWindow(QMainWindow):
 
         self.product_table = QTableWidget(0, 7)
         self.product_table.setHorizontalHeaderLabels(
-            ["Mã sản phẩm", "Tên sản phẩm", "Phân loại", "Số lượng", "Giá bán", "Mô tả", "Ngày cập nhật"]
+            ["Mã sản phẩm", "Tên sản phẩm", "Phân loại", "Số lượng", "Bảng giá", "Mô tả", "Ngày cập nhật"]
         )
         self.product_table.verticalHeader().setVisible(False)
         self.product_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -1126,7 +1176,7 @@ class MainWindow(QMainWindow):
                     item["product_code"],
                     item["name"],
                     str(item["quantity"]),
-                    format_money(item["sale_price"]),
+                    format_money(get_stock_value_price(item)),
                 ]
                 for item in rows
             ]
@@ -1138,7 +1188,7 @@ class MainWindow(QMainWindow):
                 ("Tổng số lượng tồn", str(summary["total_quantity"])),
                 ("Tổng giá trị tồn kho", format_money(summary["total_value"])),
             ]
-            headers = ["Mã hàng", "Tên hàng", "Số lượng", "Đơn giá"]
+            headers = ["Mã hàng", "Tên hàng", "Số lượng", "Giá mặc định"]
             column_widths_cm = [4.0, 8.5, 2.3, 2.9]
             centered_columns = {0, 2, 3}
 
@@ -1248,14 +1298,155 @@ class MainWindow(QMainWindow):
         )
         name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
+        price_label = QLabel(" | ".join(build_product_price_lines(product)))
+        price_label.setWordWrap(True)
+        price_label.setStyleSheet(
+            "QLabel { color: #475569; background: transparent; font-size: 12px; padding: 0px; margin: 0px; }"
+        )
+        price_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
         layout.addLayout(top_row)
         layout.addWidget(name_label)
+        layout.addWidget(price_label)
         return container
 
     def _on_product_suggestion_clicked(self, item: QListWidgetItem) -> None:
         product_code = item.data(Qt.UserRole)
         if product_code:
             self._set_selected_product(str(product_code))
+
+    def _reset_order_price_options(self) -> None:
+        self._suspend_price_option_sync = True
+        self.order_price_type_combo.clear()
+        self.order_price_type_combo.addItem("Nhap tay", ("manual", 0))
+        self._style_price_option_item(0, "manual", 0)
+        self.order_price_type_combo.setCurrentIndex(0)
+        self.order_price_type_combo.setEnabled(False)
+        self._suspend_price_option_sync = False
+
+    def _style_price_option_item(self, index: int, option_key: str, value: int) -> None:
+        meta = PRICE_OPTION_META.get(option_key, PRICE_OPTION_META["sale_price"])
+        self.order_price_type_combo.setItemData(index, QBrush(QColor(meta["color"])), Qt.ForegroundRole)
+        tooltip = meta["tooltip"]
+        if option_key != "manual":
+            tooltip = f"{tooltip}: {format_money(value)}"
+        self.order_price_type_combo.setItemData(index, tooltip, Qt.ToolTipRole)
+
+    def _build_price_option_text(self, option_key: str, label: str, value: int) -> str:
+        meta = PRICE_OPTION_META.get(option_key, PRICE_OPTION_META["sale_price"])
+        if option_key == "manual":
+            return meta["tag"]
+        return f"[{meta['tag']}] {label}: {format_money(value)}"
+
+    def _current_customer_price_group(self) -> str:
+        return str(self.customer_price_group_combo.currentData() or "auto")
+
+    def _on_customer_price_group_changed(self) -> None:
+        self._selected_customer_price_group = self._current_customer_price_group()
+        self._settings.setValue("selected_customer_price_group", self._selected_customer_price_group)
+        self._refresh_selected_product_price_for_customer_group()
+
+    def _apply_customer_price_group(self, group_key: str) -> None:
+        if group_key == "custom_price":
+            group_key = "retail_price"
+        target_group = group_key if group_key in CUSTOMER_PRICE_GROUP_LABELS else "auto"
+        index = self.customer_price_group_combo.findData(target_group)
+        if index < 0:
+            index = 0
+        if index == self.customer_price_group_combo.currentIndex():
+            self._selected_customer_price_group = target_group
+            self._settings.setValue("selected_customer_price_group", self._selected_customer_price_group)
+            self._refresh_selected_product_price_for_customer_group()
+            return
+        self.customer_price_group_combo.setCurrentIndex(index)
+
+    def _remember_price_option(self, product_code: str | None, option_key: str) -> None:
+        if not product_code or option_key in {"manual", "sale_price"}:
+            return
+        if self._current_customer_price_group() != "auto":
+            return
+        self._preferred_price_option_by_product_code[product_code] = option_key
+
+    def _current_price_option_value(self) -> int:
+        current_index = self.order_price_type_combo.currentIndex()
+        if current_index >= 0:
+            item_data = self.order_price_type_combo.itemData(current_index)
+            if item_data and item_data[0] != "manual":
+                return int(item_data[1])
+        return 0
+
+    def _populate_order_price_options(self, product: dict) -> None:
+        options = get_product_price_options(product)
+        default_value = get_default_order_price(product)
+        product_code = str(product.get("product_code", "") or "")
+        preferred_key = self._preferred_price_option_by_product_code.get(product_code, "")
+        selected_group_key = self._current_customer_price_group()
+
+        self._suspend_price_option_sync = True
+        self.order_price_type_combo.clear()
+        self.order_price_type_combo.addItem("Nhập tay", ("manual", 0))
+        self._style_price_option_item(0, "manual", 0)
+        for key, label, value in options:
+            self.order_price_type_combo.addItem(self._build_price_option_text(key, label, value), (key, value))
+            self._style_price_option_item(self.order_price_type_combo.count() - 1, key, value)
+
+        self.order_price_type_combo.setEnabled(True)
+
+        selected_index = 0
+        if selected_group_key != "auto":
+            for index in range(1, self.order_price_type_combo.count()):
+                item_data = self.order_price_type_combo.itemData(index)
+                if item_data and item_data[0] == selected_group_key:
+                    selected_index = index
+                    break
+
+        if selected_index == 0 and preferred_key:
+            for index in range(1, self.order_price_type_combo.count()):
+                item_data = self.order_price_type_combo.itemData(index)
+                if item_data and item_data[0] == preferred_key:
+                    selected_index = index
+                    break
+
+        if selected_index == 0:
+            for index in range(1, self.order_price_type_combo.count()):
+                item_data = self.order_price_type_combo.itemData(index)
+                if item_data and int(item_data[1]) == default_value:
+                    selected_index = index
+                    break
+        self.order_price_type_combo.setCurrentIndex(selected_index)
+        self._suspend_price_option_sync = False
+
+    def _apply_selected_price_option(self, index: int) -> None:
+        if self._suspend_price_option_sync or index < 0:
+            return
+
+        item_data = self.order_price_type_combo.itemData(index)
+        if not item_data or item_data[0] == "manual":
+            return
+
+        self._remember_price_option(self.selected_product_code, str(item_data[0]))
+        self._suspend_price_option_sync = True
+        self.order_price_spin.setValue(int(item_data[1]))
+        self._suspend_price_option_sync = False
+
+    def _sync_order_price_option_from_value(self, value: int) -> None:
+        if self._suspend_price_option_sync:
+            return
+
+        matched_index = 0
+        for index in range(1, self.order_price_type_combo.count()):
+            item_data = self.order_price_type_combo.itemData(index)
+            if item_data and int(item_data[1]) == value:
+                matched_index = index
+                break
+
+        self._suspend_price_option_sync = True
+        self.order_price_type_combo.setCurrentIndex(matched_index)
+        self._suspend_price_option_sync = False
+        if matched_index > 0:
+            matched_data = self.order_price_type_combo.itemData(matched_index)
+            if matched_data:
+                self._remember_price_option(self.selected_product_code, str(matched_data[0]))
 
     def _set_selected_product(self, product_code: str) -> None:
         product = self.product_map.get(product_code)
@@ -1267,9 +1458,41 @@ class MainWindow(QMainWindow):
         self.search_product_edit.setText(f"{product['product_code']} | {product['name']}")
         self._suspend_product_search = False
         self.search_product_list.hide()
-        self.order_price_spin.setValue(int(product["sale_price"]))
+        self._populate_order_price_options(product)
+        selected_price = self._current_price_option_value() or get_default_order_price(product)
+        self.order_price_spin.setValue(selected_price)
         stock = self._selected_product_stock
         self.order_qty_spin.setMaximum(max(stock, 1))
+
+    def _refresh_selected_product_price_for_customer_group(self) -> None:
+        if self.selected_product_code and self.selected_product_code in self.product_map:
+            self._set_selected_product(self.selected_product_code)
+            return
+
+        raw_text = self.search_product_edit.text().strip()
+        if not raw_text:
+            return
+
+        product_code = raw_text.split("|")[0].strip()
+        if product_code and product_code in self.product_map:
+            self._set_selected_product(product_code)
+            return
+
+        matches = self.order_controller.search_products(raw_text)
+        if not matches:
+            return
+
+        self.product_map.update({item["product_code"]: item for item in matches})
+        normalized_text = raw_text.casefold()
+        for product in matches:
+            product_code = str(product.get("product_code", "") or "")
+            product_name = str(product.get("name", "") or "")
+            if product_code.casefold() == normalized_text or product_name.casefold() == normalized_text:
+                self._set_selected_product(product_code)
+                return
+
+        if len(matches) == 1:
+            self._set_selected_product(str(matches[0]["product_code"]))
 
     def _refresh_customer_suggestions_from_inputs(self) -> None:
         if self._suspend_customer_search:
@@ -1292,10 +1515,12 @@ class MainWindow(QMainWindow):
             return
 
         for customer in customers:
+            group_key = str(customer.get("customer_price_group", "auto") or "auto")
+            group_label = CUSTOMER_PRICE_GROUP_LABELS.get(group_key, CUSTOMER_PRICE_GROUP_LABELS["auto"])
             label = (
                 f"{customer.get('full_name', '')} | {customer.get('phone', '')}"
                 f" | {customer.get('email', '')} | {customer.get('tax_code', '')}"
-                f" | {customer.get('address', '')}"
+                f" | {customer.get('address', '')} | {group_label}"
             )
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, customer)
@@ -1313,6 +1538,7 @@ class MainWindow(QMainWindow):
         self.order_email.setText(customer.get("email", ""))
         self.order_tax_code.setText(customer.get("tax_code", ""))
         self._suspend_customer_search = False
+        self._apply_customer_price_group(str(customer.get("customer_price_group", "auto") or "auto"))
         self.customer_suggestion_list.hide()
 
     def _pick_product_from_input(self) -> bool:
@@ -1442,6 +1668,7 @@ class MainWindow(QMainWindow):
             "address": self.order_address.text().strip(),
             "email": self.order_email.text().strip(),
             "tax_code": self.order_tax_code.text().strip(),
+            "customer_price_group": self._current_customer_price_group(),
             "note": "Tự động cập nhật từ lên đơn",
         }
 
@@ -1500,6 +1727,7 @@ class MainWindow(QMainWindow):
         self.search_product_list.hide()
         self.selected_product_code = None
         self._selected_product_stock = 0
+        self._reset_order_price_options()
         self.order_qty_spin.setMaximum(1_000_000_000)
         self.order_qty_spin.setValue(1)
         self.order_price_spin.setValue(0)
@@ -1850,7 +2078,7 @@ class MainWindow(QMainWindow):
                 product["name"],
                 product.get("category", ""),
                 str(product["quantity"]),
-                format_money(product["sale_price"]),
+                format_product_price_summary(product),
                 "Xem thêm",
                 product["updated_at"],
             ]

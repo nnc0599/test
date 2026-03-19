@@ -7,6 +7,7 @@ from openpyxl import load_workbook
 
 from app.config import PRODUCT_CATEGORIES
 from app.models.repositories import ProductRepository
+from app.utils.product_prices import apply_normalized_product_prices
 from app.utils.item_sort import sort_products_by_category_priority
 
 
@@ -16,11 +17,36 @@ PRODUCT_IMPORT_HEADERS = [
     "Phân loại",
     "Đơn vị tính",
     "Số lượng",
-    "Giá bán",
+    "Giá lẻ",
+    "Giá thợ",
+    "Giá đại lý",
+    "Mô tả",
+]
+
+LEGACY_MULTI_PRICE_IMPORT_HEADERS = [
+    "Mã sản phẩm",
+    "Tên sản phẩm",
+    "Phân loại",
+    "Đơn vị tính",
+    "Số lượng",
+    "Giá tùy chỉnh",
+    "Giá lẻ",
+    "Giá thợ",
+    "Giá đại lý",
     "Mô tả",
 ]
 
 LEGACY_PRODUCT_IMPORT_HEADERS = [
+    "Mã sản phẩm",
+    "Tên sản phẩm",
+    "Phân loại",
+    "Đơn vị tính",
+    "Số lượng",
+    "Giá bán",
+    "Mô tả",
+]
+
+LEGACY_PRODUCT_IMPORT_HEADERS_NO_CATEGORY = [
     "Mã sản phẩm",
     "Tên sản phẩm",
     "Đơn vị tính",
@@ -35,7 +61,9 @@ PRODUCT_EXPORT_HEADERS = [
     "Phân loại",
     "Đơn vị tính",
     "Số lượng",
-    "Giá bán",
+    "Giá lẻ",
+    "Giá thợ",
+    "Giá đại lý",
     "Mô tả",
     "Ghi chú",
     "Ngày cập nhật",
@@ -62,7 +90,7 @@ class ProductController:
             raise ValueError("Mã sản phẩm không được để trống")
         if not payload.get("name", "").strip():
             raise ValueError("Tên sản phẩm không được để trống")
-        payload = dict(payload)
+        payload = apply_normalized_product_prices(dict(payload))
         payload["category"] = self._normalize_category(payload.get("category"))
         if self.repo.get_product(payload["product_code"].strip()):
             raise ValueError("Mã sản phẩm đã tồn tại, vui lòng nhập mã khác")
@@ -73,17 +101,28 @@ class ProductController:
         try:
             sheet = workbook.active
 
-            header_row = [sheet[f"{column}1"].value for column in ["A", "B", "C", "D", "E", "F", "G"]]
+            header_row = [sheet[f"{column}1"].value for column in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]]
             normalized_headers = [str(value).strip() if value is not None else "" for value in header_row]
-            import_with_category = False
-            if normalized_headers == PRODUCT_IMPORT_HEADERS:
-                import_with_category = True
-            elif normalized_headers[:6] != LEGACY_PRODUCT_IMPORT_HEADERS:
+            import_mode = "new"
+            if normalized_headers[: len(PRODUCT_IMPORT_HEADERS)] == PRODUCT_IMPORT_HEADERS:
+                import_mode = "new"
+            elif normalized_headers[: len(LEGACY_MULTI_PRICE_IMPORT_HEADERS)] == LEGACY_MULTI_PRICE_IMPORT_HEADERS:
+                import_mode = "legacy_multi_price"
+            elif normalized_headers[:7] == LEGACY_PRODUCT_IMPORT_HEADERS:
+                import_mode = "legacy_with_category"
+            elif normalized_headers[:6] == LEGACY_PRODUCT_IMPORT_HEADERS_NO_CATEGORY:
+                import_mode = "legacy_no_category"
+            else:
                 raise ValueError("File không đúng biểu mẫu")
 
             products: list[dict] = []
             missing_code_count = 0
-            max_col = 7 if import_with_category else 6
+            if import_mode in {"new", "legacy_multi_price"}:
+                max_col = 10
+            elif import_mode == "legacy_with_category":
+                max_col = 7
+            else:
+                max_col = 6
             for row in sheet.iter_rows(min_row=2, max_col=max_col, values_only=True):
                 if row is None:
                     continue
@@ -96,22 +135,58 @@ class ProductController:
                     missing_code_count += 1
                     continue
 
-                products.append(
-                    {
+                row_number = len(products) + missing_code_count + 2
+                if import_mode == "new":
+                    payload = {
                         "product_code": product_code,
                         "name": self._as_text(values[1]),
-                        "category": self._normalize_category(
-                            values[2],
-                            required=import_with_category,
-                            row_number=len(products) + missing_code_count + 2,
-                        ) if import_with_category else "",
-                        "unit": self._as_text(values[3] if import_with_category else values[2]),
-                        "quantity": self._as_int(values[4] if import_with_category else values[3]),
-                        "sale_price": self._as_int(values[5] if import_with_category else values[4]),
-                        "description": self._as_text(values[6] if import_with_category else values[5]),
+                        "category": self._normalize_category(values[2], required=True, row_number=row_number),
+                        "unit": self._as_text(values[3]),
+                        "quantity": self._as_int(values[4]),
+                        "retail_price": self._as_int(values[5]),
+                        "worker_price": self._as_int(values[6]),
+                        "dealer_price": self._as_int(values[7]),
+                        "description": self._as_text(values[8]),
                         "note": "",
                     }
-                )
+                elif import_mode == "legacy_multi_price":
+                    retail_price = self._as_int(values[6]) or self._as_int(values[5])
+                    payload = {
+                        "product_code": product_code,
+                        "name": self._as_text(values[1]),
+                        "category": self._normalize_category(values[2], required=True, row_number=row_number),
+                        "unit": self._as_text(values[3]),
+                        "quantity": self._as_int(values[4]),
+                        "retail_price": retail_price,
+                        "worker_price": self._as_int(values[7]),
+                        "dealer_price": self._as_int(values[8]),
+                        "description": self._as_text(values[9]),
+                        "note": "",
+                    }
+                elif import_mode == "legacy_with_category":
+                    payload = {
+                        "product_code": product_code,
+                        "name": self._as_text(values[1]),
+                        "category": self._normalize_category(values[2], required=True, row_number=row_number),
+                        "unit": self._as_text(values[3]),
+                        "quantity": self._as_int(values[4]),
+                        "retail_price": self._as_int(values[5]),
+                        "description": self._as_text(values[6]),
+                        "note": "",
+                    }
+                else:
+                    payload = {
+                        "product_code": product_code,
+                        "name": self._as_text(values[1]),
+                        "category": "",
+                        "unit": self._as_text(values[2]),
+                        "quantity": self._as_int(values[3]),
+                        "retail_price": self._as_int(values[4]),
+                        "description": self._as_text(values[5]),
+                        "note": "",
+                    }
+
+                products.append(apply_normalized_product_prices(payload))
 
             return products, missing_code_count
         finally:
@@ -122,7 +197,7 @@ class ProductController:
             return
         normalized_payloads = []
         for payload in payloads:
-            item = dict(payload)
+            item = apply_normalized_product_prices(dict(payload))
             item["category"] = self._normalize_category(item.get("category"), required=False)
             normalized_payloads.append(item)
         self.repo.add_products(normalized_payloads)
@@ -139,8 +214,21 @@ class ProductController:
                 "Pin NLMT",
                 "cái",
                 0,
-                0,
+                1250000,
+                1180000,
+                1120000,
                 "Mô tả sản phẩm mẫu",
+            ])
+            sheet.append([
+                "SP002",
+                "Sản phẩm chỉ có 1 giá",
+                "Phụ kiện",
+                "cái",
+                0,
+                45000,
+                0,
+                0,
+                "Để trống giá thợ/đại lý nếu không áp dụng",
             ])
             workbook.save(file_path)
         finally:
@@ -161,7 +249,9 @@ class ProductController:
                         self._as_text(product.get("category")),
                         self._as_text(product.get("unit")),
                         self._as_int(product.get("quantity")),
-                        self._as_int(product.get("sale_price")),
+                        self._as_int(product.get("retail_price")),
+                        self._as_int(product.get("worker_price")),
+                        self._as_int(product.get("dealer_price")),
                         self._as_text(product.get("description")),
                         self._as_text(product.get("note")),
                         self._as_text(product.get("updated_at")),
@@ -201,7 +291,7 @@ class ProductController:
     def update_product(self, product_code: str, payload: dict) -> None:
         if not payload.get("note", "").strip():
             raise ValueError("Ghi chú là bắt buộc khi sửa thông tin sản phẩm")
-        payload = dict(payload)
+        payload = apply_normalized_product_prices(dict(payload))
         payload["category"] = self._normalize_category(payload.get("category"))
         self.repo.update_product(product_code, payload)
 
