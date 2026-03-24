@@ -803,10 +803,14 @@ class MainWindow(QMainWindow):
         invoice_header.setSectionResizeMode(2, QHeaderView.Stretch)
         invoice_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        invoice_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        invoice_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        invoice_header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(5, QHeaderView.Fixed)
+        invoice_header.setSectionResizeMode(6, QHeaderView.Fixed)
+        invoice_header.setSectionResizeMode(7, QHeaderView.Fixed)
         invoice_header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
+        # Đặt chiều rộng nhỏ cho các cột nút thao tác
+        self.invoice_table.setColumnWidth(5, 90)  # Xem hóa đơn
+        self.invoice_table.setColumnWidth(6, 90)  # Sửa hóa đơn
+        self.invoice_table.setColumnWidth(7, 90)  # Xóa hóa đơn
         self.invoice_table.setMinimumHeight(202)
         invoice_layout.addWidget(self.invoice_table)
 
