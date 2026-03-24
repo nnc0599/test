@@ -71,6 +71,7 @@ class QuotationInventoryTests(unittest.TestCase):
                 "email": "",
                 "tax_code": "",
                 "address": "",
+                "seller_name": "Nhân viên A",
                 "goods_amount": 3000,
                 "ship_fee": 0,
                 "total_amount": 3000,
@@ -107,6 +108,7 @@ class QuotationInventoryTests(unittest.TestCase):
                 "email": "",
                 "tax_code": "",
                 "address": "",
+                "seller_name": "Nhân viên B",
                 "goods_amount": 5000,
                 "ship_fee": 0,
                 "total_amount": 5000,
@@ -128,8 +130,13 @@ class QuotationInventoryTests(unittest.TestCase):
                 "SELECT quantity FROM products WHERE product_code = ?",
                 ("SP_TEST",),
             ).fetchone()[0]
+            quotation_seller = conn.execute(
+                "SELECT seller_name FROM quotations WHERE id = ?",
+                (quotation_id,),
+            ).fetchone()[0]
 
         self.assertEqual(quantity_after_update, 10)
+        self.assertEqual(quotation_seller, "Nhân viên B")
 
     def test_export_quotation_to_invoice_reduces_stock(self) -> None:
         repo = InvoiceRepository()
@@ -142,6 +149,7 @@ class QuotationInventoryTests(unittest.TestCase):
                 "email": "",
                 "tax_code": "",
                 "address": "",
+                "seller_name": "Nhân viên C",
                 "goods_amount": 4000,
                 "ship_fee": 0,
                 "total_amount": 4000,
@@ -173,7 +181,7 @@ class QuotationInventoryTests(unittest.TestCase):
                 (quotation_id,),
             ).fetchone()
             invoice_row = conn.execute(
-                "SELECT invoice_no FROM invoices WHERE invoice_no = ?",
+                "SELECT invoice_no, seller_name FROM invoices WHERE invoice_no = ?",
                 ("000001",),
             ).fetchone()
 
@@ -181,6 +189,7 @@ class QuotationInventoryTests(unittest.TestCase):
         self.assertEqual(exported_row["status"], "exported")
         self.assertEqual(exported_row["exported_invoice_no"], "000001")
         self.assertIsNotNone(invoice_row)
+        self.assertEqual(invoice_row["seller_name"], "Nhân viên C")
 
 
 if __name__ == "__main__":

@@ -33,6 +33,7 @@ class Invoice:
     invoice_no: str
     created_at: str
     customer_name: str
+    seller_name: str
     phone: str
     email: str
     tax_code: str

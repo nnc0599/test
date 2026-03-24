@@ -72,6 +72,7 @@ class OrderController:
             "invoice_no": invoice_data["invoice_no"],
             "created_at": created_at,
             "customer_name": customer_data["full_name"],
+            "seller_name": invoice_data.get("seller_name", "Cửa hàng"),
             "phone": customer_data.get("phone", ""),
             "address": customer_data.get("address", ""),
             "email": customer_data.get("email", ""),
@@ -92,6 +93,7 @@ class OrderController:
         payload = {
             "created_at": created_at,
             "customer_name": customer_data["full_name"],
+            "seller_name": quotation_data.get("seller_name", "Cửa hàng"),
             "phone": customer_data.get("phone", ""),
             "address": customer_data.get("address", ""),
             "email": customer_data.get("email", ""),
@@ -113,6 +115,7 @@ class OrderController:
         payload = {
             "created_at": created_at,
             "customer_name": customer_data["full_name"],
+            "seller_name": quotation_data.get("seller_name", "Cửa hàng"),
             "phone": customer_data.get("phone", ""),
             "address": customer_data.get("address", ""),
             "email": customer_data.get("email", ""),
@@ -142,6 +145,7 @@ class OrderController:
             "invoice_no": invoice_no,
             "created_at": created_at,
             "customer_name": customer_data["full_name"],
+            "seller_name": invoice_data.get("seller_name", "Cửa hàng"),
             "phone": customer_data.get("phone", ""),
             "address": customer_data.get("address", ""),
             "email": customer_data.get("email", ""),

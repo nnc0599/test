@@ -583,13 +583,14 @@ class InvoiceRepository:
         conn.execute(
             """
             INSERT INTO invoices (
-                invoice_no, created_at, customer_name, phone, email, tax_code, address, total_amount
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                invoice_no, created_at, customer_name, seller_name, phone, email, tax_code, address, total_amount
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["invoice_no"],
                 payload["created_at"],
                 payload["customer_name"],
+                payload.get("seller_name", "Cửa hàng"),
                 payload.get("phone", ""),
                 payload.get("email", ""),
                 payload.get("tax_code", ""),
@@ -662,6 +663,7 @@ class InvoiceRepository:
                 INSERT INTO quotations (
                     created_at,
                     customer_name,
+                    seller_name,
                     phone,
                     email,
                     tax_code,
@@ -672,11 +674,12 @@ class InvoiceRepository:
                     status,
                     export_path,
                     exported_invoice_no
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["created_at"],
                     payload["customer_name"],
+                    payload.get("seller_name", "Cửa hàng"),
                     payload.get("phone", ""),
                     payload.get("email", ""),
                     payload.get("tax_code", ""),
@@ -733,6 +736,7 @@ class InvoiceRepository:
                 SET
                     created_at = ?,
                     customer_name = ?,
+                    seller_name = ?,
                     phone = ?,
                     email = ?,
                     tax_code = ?,
@@ -747,6 +751,7 @@ class InvoiceRepository:
                 (
                     payload["created_at"],
                     payload["customer_name"],
+                    payload.get("seller_name", "Cửa hàng"),
                     payload.get("phone", ""),
                     payload.get("email", ""),
                     payload.get("tax_code", ""),
@@ -790,7 +795,7 @@ class InvoiceRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT id, customer_name, phone, goods_amount, total_amount, created_at
+                SELECT id, customer_name, seller_name, phone, goods_amount, total_amount, created_at
                 FROM quotations
                 WHERE status = 'pending'
                 ORDER BY created_at DESC, id DESC
@@ -808,6 +813,7 @@ class InvoiceRepository:
                     id,
                     created_at,
                     customer_name,
+                    seller_name,
                     phone,
                     email,
                     tax_code,
@@ -860,6 +866,7 @@ class InvoiceRepository:
                     id,
                     created_at,
                     customer_name,
+                    seller_name,
                     phone,
                     email,
                     tax_code,
@@ -901,6 +908,7 @@ class InvoiceRepository:
                 "invoice_no": invoice_no,
                 "created_at": quotation["created_at"],
                 "customer_name": quotation["customer_name"],
+                "seller_name": quotation["seller_name"],
                 "phone": quotation["phone"],
                 "email": quotation["email"],
                 "tax_code": quotation["tax_code"],
@@ -927,6 +935,7 @@ class InvoiceRepository:
                     invoices.invoice_no,
                     invoices.created_at,
                     invoices.customer_name,
+                    invoices.seller_name,
                     invoices.phone,
                     invoices.email,
                     invoices.tax_code,
@@ -939,6 +948,7 @@ class InvoiceRepository:
                     invoices.invoice_no,
                     invoices.created_at,
                     invoices.customer_name,
+                    invoices.seller_name,
                     invoices.phone,
                     invoices.email,
                     invoices.tax_code,
@@ -962,8 +972,10 @@ class InvoiceRepository:
 
         if normalized_keyword:
             like_keyword = f"%{normalized_keyword}%"
-            clauses.append("(invoices.invoice_no LIKE ? OR invoices.customer_name LIKE ? OR invoices.phone LIKE ?)")
-            params.extend([like_keyword, like_keyword, like_keyword])
+            clauses.append(
+                "(invoices.invoice_no LIKE ? OR invoices.customer_name LIKE ? OR invoices.seller_name LIKE ? OR invoices.phone LIKE ?)"
+            )
+            params.extend([like_keyword, like_keyword, like_keyword, like_keyword])
 
         normalized_period_type = period_type.strip().lower()
         if normalized_period_type in {"day", "month"} and period_value:
@@ -980,6 +992,7 @@ class InvoiceRepository:
                     invoices.invoice_no,
                     invoices.created_at,
                     invoices.customer_name,
+                    invoices.seller_name,
                     invoices.phone,
                     invoices.email,
                     invoices.tax_code,
@@ -993,6 +1006,7 @@ class InvoiceRepository:
                     invoices.invoice_no,
                     invoices.created_at,
                     invoices.customer_name,
+                    invoices.seller_name,
                     invoices.phone,
                     invoices.email,
                     invoices.tax_code,
@@ -1009,7 +1023,7 @@ class InvoiceRepository:
         with get_connection() as conn:
             invoice = conn.execute(
                 """
-                SELECT invoice_no, created_at, customer_name, phone, email, tax_code, address, total_amount
+                SELECT invoice_no, created_at, customer_name, seller_name, phone, email, tax_code, address, total_amount
                 FROM invoices
                 WHERE invoice_no = ?
                 """,
@@ -1072,6 +1086,7 @@ class InvoiceRepository:
                 SET
                     created_at = ?,
                     customer_name = ?,
+                    seller_name = ?,
                     phone = ?,
                     email = ?,
                     tax_code = ?,
@@ -1082,6 +1097,7 @@ class InvoiceRepository:
                 (
                     payload["created_at"],
                     payload["customer_name"],
+                    payload.get("seller_name", "Cửa hàng"),
                     payload.get("phone", ""),
                     payload.get("email", ""),
                     payload.get("tax_code", ""),

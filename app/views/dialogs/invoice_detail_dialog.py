@@ -40,6 +40,7 @@ class InvoiceDetailDialog(QDialog):
         header_form.addRow("Số hóa đơn", QLabel(invoice["invoice_no"]))
         header_form.addRow("Ngày tạo", QLabel(invoice["created_at"]))
         header_form.addRow("Tên khách hàng", QLabel(invoice["customer_name"]))
+        header_form.addRow("Người bán", QLabel(invoice.get("seller_name", "Cửa hàng")))
         header_form.addRow("Số điện thoại", QLabel(invoice.get("phone", "")))
         header_form.addRow("Gmail", QLabel(invoice.get("email", "")))
         header_form.addRow("Mã số thuế", QLabel(invoice.get("tax_code", "")))

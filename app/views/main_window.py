@@ -273,6 +273,7 @@ class MainWindow(QMainWindow):
         self.order_address = QLineEdit()
         self.order_email = QLineEdit()
         self.order_tax_code = QLineEdit()
+        self.order_seller = QLineEdit("Cửa hàng")
         self.customer_price_group_combo = QComboBox()
         self.customer_suggestion_list = QListWidget()
         self.customer_suggestion_list.setAlternatingRowColors(True)
@@ -286,6 +287,7 @@ class MainWindow(QMainWindow):
             self.order_address,
             self.order_email,
             self.order_tax_code,
+            self.order_seller,
             self.customer_price_group_combo,
         ]:
             widget.setStyleSheet(compact_input_style)
@@ -312,6 +314,8 @@ class MainWindow(QMainWindow):
         customer_grid.addWidget(self.order_tax_code, 1, 5)
         customer_grid.addWidget(QLabel("Nhóm khách"), 2, 0)
         customer_grid.addWidget(self.customer_price_group_combo, 2, 1)
+        customer_grid.addWidget(QLabel("Người bán"), 2, 2)
+        customer_grid.addWidget(self.order_seller, 2, 3)
         customer_grid.addWidget(self.customer_suggestion_list, 3, 1, 1, 5)
 
         customer_grid.setColumnStretch(1, 3)
@@ -759,7 +763,7 @@ class MainWindow(QMainWindow):
         invoice_search_layout.addWidget(QLabel("Tìm kiếm"), 0, 0)
 
         self.invoice_search_edit = QLineEdit()
-        self.invoice_search_edit.setPlaceholderText("Nhập mã hóa đơn, họ tên hoặc số điện thoại")
+        self.invoice_search_edit.setPlaceholderText("Nhập mã hóa đơn, khách hàng, người bán hoặc số điện thoại")
         invoice_search_layout.addWidget(self.invoice_search_edit, 0, 1)
 
         invoice_search_layout.addWidget(QLabel("Lọc theo"), 0, 2)
@@ -785,9 +789,9 @@ class MainWindow(QMainWindow):
         self.invoice_suggestion_list.hide()
         invoice_layout.addWidget(self.invoice_suggestion_list)
 
-        self.invoice_table = QTableWidget(0, 8)
+        self.invoice_table = QTableWidget(0, 9)
         self.invoice_table.setHorizontalHeaderLabels(
-            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền", "Xem hóa đơn", "Sửa hóa đơn", "Xóa hóa đơn"]
+            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Người bán", "Số điện thoại", "Tổng tiền", "Xem hóa đơn", "Sửa hóa đơn", "Xóa hóa đơn"]
         )
         self.invoice_table.verticalHeader().setVisible(False)
         self.invoice_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -802,6 +806,7 @@ class MainWindow(QMainWindow):
         invoice_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         invoice_header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        invoice_header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
         self.invoice_table.setMinimumHeight(202)
         invoice_layout.addWidget(self.invoice_table)
 
@@ -948,7 +953,7 @@ class MainWindow(QMainWindow):
 
         for invoice in invoices[:10]:
             label = (
-                f"{invoice['invoice_no']} | {invoice['customer_name']} | {invoice.get('phone', '')} | {invoice['created_at']}"
+                f"{invoice['invoice_no']} | {invoice['customer_name']} | {invoice.get('seller_name', 'Cửa hàng')} | {invoice.get('phone', '')} | {invoice['created_at']}"
             )
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, invoice["invoice_no"])
@@ -972,6 +977,7 @@ class MainWindow(QMainWindow):
                 invoice["invoice_no"],
                 invoice["created_at"],
                 invoice["customer_name"],
+                invoice.get("seller_name", "Cửa hàng"),
                 invoice.get("phone", ""),
                 format_money(invoice["total_amount"]),
             ]
@@ -986,7 +992,7 @@ class MainWindow(QMainWindow):
             view_btn.clicked.connect(
                 lambda checked=False, invoice_no=invoice["invoice_no"]: self._open_invoice_preview(invoice_no)
             )
-            self.invoice_table.setCellWidget(row, 5, view_btn)
+            self.invoice_table.setCellWidget(row, 6, view_btn)
 
             edit_btn = QPushButton("Sửa hóa đơn")
             edit_btn.setStyleSheet(
@@ -996,7 +1002,7 @@ class MainWindow(QMainWindow):
             edit_btn.clicked.connect(
                 lambda checked=False, invoice_no=invoice["invoice_no"]: self._edit_invoice_from_row(invoice_no)
             )
-            self.invoice_table.setCellWidget(row, 6, edit_btn)
+            self.invoice_table.setCellWidget(row, 7, edit_btn)
 
             delete_btn = QPushButton("Xóa hóa đơn")
             delete_btn.setStyleSheet(
@@ -1006,7 +1012,7 @@ class MainWindow(QMainWindow):
             delete_btn.clicked.connect(
                 lambda checked=False, invoice_no=invoice["invoice_no"]: self._delete_invoice_from_row(invoice_no)
             )
-            self.invoice_table.setCellWidget(row, 7, delete_btn)
+            self.invoice_table.setCellWidget(row, 8, delete_btn)
         self.invoice_table.resizeRowsToContents()
 
     def _edit_invoice_from_row(self, invoice_no: str) -> None:
@@ -1032,6 +1038,7 @@ class MainWindow(QMainWindow):
         self.order_address.setText(str(invoice.get("address", "") or ""))
         self.order_email.setText(str(invoice.get("email", "") or ""))
         self.order_tax_code.setText(str(invoice.get("tax_code", "") or ""))
+        self.order_seller.setText(str(invoice.get("seller_name", "Cửa hàng") or "Cửa hàng"))
         self._suspend_customer_search = False
 
         self.customer_suggestion_list.clear()
@@ -1687,6 +1694,7 @@ class MainWindow(QMainWindow):
             "invoice_no": invoice_no,
             "created_at": created_at,
             "customer_name": customer_data["full_name"],
+            "seller_name": self.order_seller.text().strip() or "Cửa hàng",
             "phone": customer_data["phone"],
             "email": customer_data["email"],
             "tax_code": customer_data["tax_code"],
@@ -1762,6 +1770,7 @@ class MainWindow(QMainWindow):
         self.order_address.clear()
         self.order_email.clear()
         self.order_tax_code.clear()
+        self.order_seller.setText("Cửa hàng")
         self.customer_suggestion_list.clear()
         self.customer_suggestion_list.hide()
         self._reset_add_item_inputs()
@@ -1866,6 +1875,7 @@ class MainWindow(QMainWindow):
         self.order_address.setText(str(quotation.get("address", "") or ""))
         self.order_email.setText(str(quotation.get("email", "") or ""))
         self.order_tax_code.setText(str(quotation.get("tax_code", "") or ""))
+        self.order_seller.setText(str(quotation.get("seller_name", "Cửa hàng") or "Cửa hàng"))
         self._suspend_customer_search = False
 
         self.customer_suggestion_list.clear()
@@ -1900,6 +1910,7 @@ class MainWindow(QMainWindow):
             "invoice_no": "",
             "created_at": quotation["created_at"],
             "customer_name": quotation["customer_name"],
+            "seller_name": quotation.get("seller_name", "Cửa hàng"),
             "phone": quotation.get("phone", ""),
             "email": quotation.get("email", ""),
             "tax_code": quotation.get("tax_code", ""),
@@ -1932,6 +1943,7 @@ class MainWindow(QMainWindow):
             "invoice_no": invoice_no,
             "created_at": quotation["created_at"],
             "customer_name": quotation["customer_name"],
+            "seller_name": quotation.get("seller_name", "Cửa hàng"),
             "phone": quotation.get("phone", ""),
             "email": quotation.get("email", ""),
             "tax_code": quotation.get("tax_code", ""),
