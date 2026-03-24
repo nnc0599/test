@@ -992,7 +992,7 @@ class MainWindow(QMainWindow):
             view_btn.clicked.connect(
                 lambda checked=False, invoice_no=invoice["invoice_no"]: self._open_invoice_preview(invoice_no)
             )
-            self.invoice_table.setCellWidget(row, 6, view_btn)
+            self.invoice_table.setCellWidget(row, 5, view_btn)
 
             edit_btn = QPushButton("Sửa hóa đơn")
             edit_btn.setStyleSheet(
@@ -1002,7 +1002,7 @@ class MainWindow(QMainWindow):
             edit_btn.clicked.connect(
                 lambda checked=False, invoice_no=invoice["invoice_no"]: self._edit_invoice_from_row(invoice_no)
             )
-            self.invoice_table.setCellWidget(row, 7, edit_btn)
+            self.invoice_table.setCellWidget(row, 6, edit_btn)
 
             delete_btn = QPushButton("Xóa hóa đơn")
             delete_btn.setStyleSheet(
@@ -1012,7 +1012,7 @@ class MainWindow(QMainWindow):
             delete_btn.clicked.connect(
                 lambda checked=False, invoice_no=invoice["invoice_no"]: self._delete_invoice_from_row(invoice_no)
             )
-            self.invoice_table.setCellWidget(row, 8, delete_btn)
+            self.invoice_table.setCellWidget(row, 7, delete_btn)
         self.invoice_table.resizeRowsToContents()
 
     def _edit_invoice_from_row(self, invoice_no: str) -> None:
