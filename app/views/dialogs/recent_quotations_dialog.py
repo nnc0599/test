@@ -92,7 +92,7 @@ class RecentQuotationsDialog(QDialog):
         root.addWidget(action_panel)
 
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Họ tên", "Người bán", "Số điện thoại", "Tổng tiền hàng", "Ngày tạo đơn"])
+        self.table.setHorizontalHeaderLabels(["Họ tên", "Số điện thoại", "Tổng tiền hàng", "Ngày tạo đơn", "Người bán"])
         self.table.verticalHeader().setVisible(False)
         self.table.setWordWrap(True)
         self.table.setTextElideMode(Qt.ElideNone)
@@ -154,10 +154,10 @@ class RecentQuotationsDialog(QDialog):
         for row_index, row in enumerate(rows):
             values = [
                 row["customer_name"],
-                row.get("seller_name", "Cửa hàng"),
                 row.get("phone", ""),
                 format_money(int(row.get("goods_amount", 0))),
                 row["created_at"],
+                row.get("seller_name", "Cửa hàng"),
             ]
             for col_index, value in enumerate(values):
                 item = QTableWidgetItem(str(value))

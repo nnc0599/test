@@ -791,7 +791,7 @@ class MainWindow(QMainWindow):
 
         self.invoice_table = QTableWidget(0, 9)
         self.invoice_table.setHorizontalHeaderLabels(
-            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Người bán", "Số điện thoại", "Tổng tiền", "Xem hóa đơn", "Sửa hóa đơn", "Xóa hóa đơn"]
+            ["Số hóa đơn", "Ngày tạo", "Khách hàng", "Số điện thoại", "Tổng tiền", "Xem hóa đơn", "Sửa hóa đơn", "Xóa hóa đơn", "Người bán"]
         )
         self.invoice_table.verticalHeader().setVisible(False)
         self.invoice_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -977,11 +977,11 @@ class MainWindow(QMainWindow):
                 invoice["invoice_no"],
                 invoice["created_at"],
                 invoice["customer_name"],
-                invoice.get("seller_name", "Cửa hàng"),
                 invoice.get("phone", ""),
                 format_money(invoice["total_amount"]),
+                invoice.get("seller_name", "Cửa hàng"),
             ]
-            for col, value in enumerate(values):
+            for col, value in ((0, values[0]), (1, values[1]), (2, values[2]), (3, values[3]), (4, values[4]), (8, values[5])):
                 self.invoice_table.setItem(row, col, QTableWidgetItem(value))
 
             view_btn = QPushButton("Xem hóa đơn")
