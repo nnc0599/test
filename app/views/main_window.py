@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.config import DEFAULT_HEIGHT, DEFAULT_WIDTH, MIN_FONT_PX
+from app.config import DEFAULT_HEIGHT, DEFAULT_WIDTH, MIN_FONT_PX, PRODUCT_CATEGORIES
 from app.controllers.order_controller import OrderController
 from app.controllers.product_controller import ProductController
 from app.controllers.report_controller import ReportController
@@ -274,6 +274,7 @@ class MainWindow(QMainWindow):
         self.order_email = QLineEdit()
         self.order_tax_code = QLineEdit()
         self.order_seller = QLineEdit("Cửa hàng")
+        self.order_note = QLineEdit()
         self.customer_price_group_combo = QComboBox()
         self.customer_suggestion_list = QListWidget()
         self.customer_suggestion_list.setAlternatingRowColors(True)
@@ -288,6 +289,7 @@ class MainWindow(QMainWindow):
             self.order_email,
             self.order_tax_code,
             self.order_seller,
+            self.order_note,
             self.customer_price_group_combo,
         ]:
             widget.setStyleSheet(compact_input_style)
@@ -316,6 +318,8 @@ class MainWindow(QMainWindow):
         customer_grid.addWidget(self.customer_price_group_combo, 2, 1)
         customer_grid.addWidget(QLabel("Người bán"), 2, 2)
         customer_grid.addWidget(self.order_seller, 2, 3)
+        customer_grid.addWidget(QLabel("Ghi chú"), 2, 4)
+        customer_grid.addWidget(self.order_note, 2, 5)
         customer_grid.addWidget(self.customer_suggestion_list, 3, 1, 1, 5)
 
         customer_grid.setColumnStretch(1, 3)
@@ -486,6 +490,7 @@ class MainWindow(QMainWindow):
             self.order_address,
             self.order_email,
             self.order_tax_code,
+            self.order_note,
             self.search_product_edit,
             self.order_qty_spin,
             self.order_price_spin,
@@ -558,6 +563,25 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setSpacing(10)
 
+        search_row = QHBoxLayout()
+        search_row.setSpacing(8)
+        search_row.addWidget(QLabel("Tìm kiếm sản phẩm"))
+
+        self.product_search_edit = QLineEdit()
+        self.product_search_edit.setPlaceholderText("Nhập mã sản phẩm, tên sản phẩm hoặc mô tả")
+        self.product_search_edit.setClearButtonEnabled(True)
+        search_row.addWidget(self.product_search_edit, 1)
+
+        search_row.addWidget(QLabel("Phân loại"))
+        self.product_category_filter_combo = QComboBox()
+        self.product_category_filter_combo.addItem("Tất cả", "")
+        for category in PRODUCT_CATEGORIES:
+            self.product_category_filter_combo.addItem(category, category)
+        self.product_category_filter_combo.setMinimumWidth(170)
+        search_row.addWidget(self.product_category_filter_combo)
+
+        layout.addLayout(search_row)
+
         actions = QHBoxLayout()
         self.btn_add_product = QPushButton("Thêm sản phẩm")
         self.btn_edit_product = QPushButton("Sửa thông tin")
@@ -618,6 +642,8 @@ class MainWindow(QMainWindow):
         self.btn_edit_product.clicked.connect(self._on_edit_product)
         self.btn_product_history.clicked.connect(self._on_view_product_history)
         self.btn_delete_product.clicked.connect(self._on_delete_product)
+        self.product_search_edit.textChanged.connect(lambda _text: self.refresh_products())
+        self.product_category_filter_combo.currentIndexChanged.connect(lambda _index: self.refresh_products())
         self.product_table.itemSelectionChanged.connect(self._sync_product_action_state)
 
         return page
@@ -808,9 +834,9 @@ class MainWindow(QMainWindow):
         invoice_header.setSectionResizeMode(7, QHeaderView.Fixed)
         invoice_header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
         # Đặt chiều rộng nhỏ cho các cột nút thao tác
-        self.invoice_table.setColumnWidth(5, 90)  # Xem hóa đơn
-        self.invoice_table.setColumnWidth(6, 90)  # Sửa hóa đơn
-        self.invoice_table.setColumnWidth(7, 90)  # Xóa hóa đơn
+        self.invoice_table.setColumnWidth(5, 64)  # Xem hóa đơn
+        self.invoice_table.setColumnWidth(6, 64)  # Sửa hóa đơn
+        self.invoice_table.setColumnWidth(7, 64)  # Xóa hóa đơn
         self.invoice_table.setMinimumHeight(202)
         invoice_layout.addWidget(self.invoice_table)
 
@@ -988,9 +1014,15 @@ class MainWindow(QMainWindow):
             for col, value in ((0, values[0]), (1, values[1]), (2, values[2]), (3, values[3]), (4, values[4]), (8, values[5])):
                 self.invoice_table.setItem(row, col, QTableWidgetItem(value))
 
-            view_btn = QPushButton("Xem hóa đơn")
+            action_button_style = (
+                "QPushButton { padding: 4px 6px; font-size: 11px; font-weight: 700; }"
+                "QPushButton:hover { }"
+            )
+
+            view_btn = QPushButton("Xem")
             view_btn.setStyleSheet(
-                "QPushButton { background: #E0F2FE; color: #075985; font-weight: 700; }"
+                action_button_style
+                + "QPushButton { background: #E0F2FE; color: #075985; }"
                 "QPushButton:hover { background: #BAE6FD; }"
             )
             view_btn.clicked.connect(
@@ -998,9 +1030,10 @@ class MainWindow(QMainWindow):
             )
             self.invoice_table.setCellWidget(row, 5, view_btn)
 
-            edit_btn = QPushButton("Sửa hóa đơn")
+            edit_btn = QPushButton("Sửa")
             edit_btn.setStyleSheet(
-                "QPushButton { background: #FEF9C3; color: #78350F; font-weight: 700; }"
+                action_button_style
+                + "QPushButton { background: #FEF9C3; color: #78350F; }"
                 "QPushButton:hover { background: #FDE68A; }"
             )
             edit_btn.clicked.connect(
@@ -1008,9 +1041,10 @@ class MainWindow(QMainWindow):
             )
             self.invoice_table.setCellWidget(row, 6, edit_btn)
 
-            delete_btn = QPushButton("Xóa hóa đơn")
+            delete_btn = QPushButton("Xóa")
             delete_btn.setStyleSheet(
-                "QPushButton { background: #FEE2E2; color: #7F1D1D; font-weight: 700; }"
+                action_button_style
+                + "QPushButton { background: #FEE2E2; color: #7F1D1D; }"
                 "QPushButton:hover { background: #FECACA; }"
             )
             delete_btn.clicked.connect(
@@ -1699,6 +1733,7 @@ class MainWindow(QMainWindow):
             "created_at": created_at,
             "customer_name": customer_data["full_name"],
             "seller_name": self.order_seller.text().strip() or "Cửa hàng",
+            "note": self.order_note.text().strip(),
             "phone": customer_data["phone"],
             "email": customer_data["email"],
             "tax_code": customer_data["tax_code"],
@@ -1775,6 +1810,7 @@ class MainWindow(QMainWindow):
         self.order_email.clear()
         self.order_tax_code.clear()
         self.order_seller.setText("Cửa hàng")
+        self.order_note.clear()
         self.customer_suggestion_list.clear()
         self.customer_suggestion_list.hide()
         self._reset_add_item_inputs()
@@ -1880,6 +1916,7 @@ class MainWindow(QMainWindow):
         self.order_email.setText(str(quotation.get("email", "") or ""))
         self.order_tax_code.setText(str(quotation.get("tax_code", "") or ""))
         self.order_seller.setText(str(quotation.get("seller_name", "Cửa hàng") or "Cửa hàng"))
+        self.order_note.setText(str(quotation.get("note", "") or ""))
         self._suspend_customer_search = False
 
         self.customer_suggestion_list.clear()
@@ -1915,6 +1952,7 @@ class MainWindow(QMainWindow):
             "created_at": quotation["created_at"],
             "customer_name": quotation["customer_name"],
             "seller_name": quotation.get("seller_name", "Cửa hàng"),
+            "note": quotation.get("note", ""),
             "phone": quotation.get("phone", ""),
             "email": quotation.get("email", ""),
             "tax_code": quotation.get("tax_code", ""),
@@ -2083,7 +2121,18 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_products(self) -> None:
-        products = sort_products_by_category_priority(self.product_controller.list_products())
+        keyword = self.product_search_edit.text().strip() if getattr(self, "product_search_edit", None) is not None else ""
+        if keyword:
+            products = self.product_controller.search_products(keyword)
+        else:
+            products = sort_products_by_category_priority(self.product_controller.list_products())
+        selected_category = (
+            str(self.product_category_filter_combo.currentData() or "")
+            if getattr(self, "product_category_filter_combo", None) is not None
+            else ""
+        )
+        if selected_category:
+            products = [product for product in products if str(product.get("category", "") or "") == selected_category]
         self.product_map = {item["product_code"]: item for item in products}
         self._products_loaded = True
 
@@ -2108,6 +2157,7 @@ class MainWindow(QMainWindow):
                 else:
                     self.product_table.setItem(row, col, QTableWidgetItem(value))
         self.product_table.resizeRowsToContents()
+        self._sync_product_action_state()
 
     def _show_product_desc_direct(self, product: dict) -> None:
         dlg = DescriptionDialog(

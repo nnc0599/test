@@ -664,6 +664,7 @@ class InvoiceRepository:
                     created_at,
                     customer_name,
                     seller_name,
+                    note,
                     phone,
                     email,
                     tax_code,
@@ -674,12 +675,13 @@ class InvoiceRepository:
                     status,
                     export_path,
                     exported_invoice_no
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["created_at"],
                     payload["customer_name"],
                     payload.get("seller_name", "Cửa hàng"),
+                    payload.get("note", ""),
                     payload.get("phone", ""),
                     payload.get("email", ""),
                     payload.get("tax_code", ""),
@@ -737,6 +739,7 @@ class InvoiceRepository:
                     created_at = ?,
                     customer_name = ?,
                     seller_name = ?,
+                    note = ?,
                     phone = ?,
                     email = ?,
                     tax_code = ?,
@@ -752,6 +755,7 @@ class InvoiceRepository:
                     payload["created_at"],
                     payload["customer_name"],
                     payload.get("seller_name", "Cửa hàng"),
+                    payload.get("note", ""),
                     payload.get("phone", ""),
                     payload.get("email", ""),
                     payload.get("tax_code", ""),
@@ -795,7 +799,7 @@ class InvoiceRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT id, customer_name, seller_name, phone, goods_amount, total_amount, created_at
+                SELECT id, customer_name, seller_name, note, phone, goods_amount, total_amount, created_at
                 FROM quotations
                 WHERE status = 'pending'
                 ORDER BY created_at DESC, id DESC
@@ -814,6 +818,7 @@ class InvoiceRepository:
                     created_at,
                     customer_name,
                     seller_name,
+                    note,
                     phone,
                     email,
                     tax_code,

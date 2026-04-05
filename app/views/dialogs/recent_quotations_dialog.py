@@ -91,8 +91,8 @@ class RecentQuotationsDialog(QDialog):
         action_layout.addWidget(self.cancel_btn)
         root.addWidget(action_panel)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Họ tên", "Số điện thoại", "Tổng tiền hàng", "Ngày tạo đơn", "Người bán"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Họ tên", "Số điện thoại", "Tổng tiền hàng", "Ngày tạo đơn", "Ghi chú", "Người bán"])
         self.table.verticalHeader().setVisible(False)
         self.table.setWordWrap(True)
         self.table.setTextElideMode(Qt.ElideNone)
@@ -106,7 +106,8 @@ class RecentQuotationsDialog(QDialog):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         root.addWidget(self.table, 1)
 
         footer = QHBoxLayout()
@@ -157,6 +158,7 @@ class RecentQuotationsDialog(QDialog):
                 row.get("phone", ""),
                 format_money(int(row.get("goods_amount", 0))),
                 row["created_at"],
+                row.get("note", ""),
                 row.get("seller_name", "Cửa hàng"),
             ]
             for col_index, value in enumerate(values):
