@@ -1,0 +1,48 @@
+name: Build sales_app Windows EXE
+
+"on":
+  workflow_dispatch:
+  push:
+    paths:
+      - "app/**"
+      - "app_gen/**"
+      - "run.py"
+      - "requirements.txt"
+      - ".github/workflows/build-sales-app-windows.yml"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: python app_gen/build_onefile.py
+
+      - name: Prepare portable bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          New-Item -ItemType Directory -Force -Path release/data | Out-Null
+          Copy-Item app_gen/sales_app.exe release/sales_app.exe
+          Copy-Item app_gen/README.md release/README.md
+          Copy-Item app_gen/data/README.txt release/data/README.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sales-app-windows-exe
+          path: release/*

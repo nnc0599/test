@@ -5,7 +5,6 @@ from copy import deepcopy
 from datetime import datetime
 from functools import lru_cache
 from html import escape
-from pathlib import Path
 from zipfile import ZipFile
 
 from docx import Document
@@ -16,14 +15,9 @@ from docx.oxml.ns import qn
 from docx.shared import Cm
 from docx.shared import Pt
 
+from app.config import EXPORT_DIR, SCREEN_IMAGE_PATH, TEMPLATE_PATH
 from app.utils.item_sort import sort_items_by_unit_price_desc
 from app.utils.time_utils import now_utc7
-
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-TEMPLATE_PATH = ROOT_DIR / "data" / "template.docx"
-EXPORT_DIR = ROOT_DIR / "data" / "exported_invoices"
-SCREEN_IMAGE_PATH = ROOT_DIR / "data" / "Screen.png"
 
 DOCUMENT_VARIANTS = {
     "invoice": {

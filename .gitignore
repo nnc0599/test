@@ -5,3 +5,6 @@ data/*.db
 data/exported_invoices/
 build/
 dist/
+app_gen/build/
+app_gen/*.exe
+app_gen/sales_app
