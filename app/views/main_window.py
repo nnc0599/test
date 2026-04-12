@@ -2283,9 +2283,6 @@ class MainWindow(QMainWindow):
         if ok != QMessageBox.Yes:
             return
 
-        if not PasswordDialog.verify(self, "Nhập lại mật khẩu để xác nhận xóa"):
-            return
-
         try:
             self.product_controller.delete_product(code)
             self.refresh_products()
