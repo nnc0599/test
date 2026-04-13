@@ -38,6 +38,12 @@ from app.controllers.order_controller import OrderController
 from app.controllers.product_controller import ProductController
 from app.controllers.report_controller import ReportController
 from app.utils.invoice_docx import EXPORT_DIR
+from app.utils.invoice_attachments import (
+    cleanup_obsolete_invoice_attachments,
+    delete_invoice_attachment_dir,
+    remove_staged_invoice_attachments,
+    stage_invoice_attachments,
+)
 from app.utils.product_prices import build_product_price_lines, format_product_price_summary, get_default_order_price, get_product_price_options, get_stock_value_price
 from app.utils.time_utils import now_iso_utc7
 from app.utils.invoice_docx import build_invoice_output_name, build_quotation_output_name, export_invoice_docx, export_report_docx
@@ -330,6 +336,93 @@ class MainWindow(QMainWindow):
         self.customer_grid = customer_grid
         layout.addWidget(customer_box)
 
+        attachment_box = QGroupBox("File đính kèm hóa đơn")
+        attachment_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        attachment_box.setStyleSheet(compact_group_style)
+        attachment_grid = QGridLayout(attachment_box)
+        attachment_grid.setContentsMargins(6, 4, 6, 4)
+        attachment_grid.setHorizontalSpacing(6)
+        attachment_grid.setVerticalSpacing(4)
+
+        self.order_electronic_invoice_path = QLineEdit()
+        self.order_electronic_invoice_path.setPlaceholderText("Chưa chọn file hóa đơn điện tử")
+        self.order_electronic_invoice_path.setReadOnly(True)
+        self.order_electronic_invoice_path.setStyleSheet(compact_input_style)
+        self.order_electronic_invoice_path.setMinimumHeight(28)
+
+        self.order_warehouse_invoice_path = QLineEdit()
+        self.order_warehouse_invoice_path.setPlaceholderText("Chưa chọn file hóa đơn xuất kho")
+        self.order_warehouse_invoice_path.setReadOnly(True)
+        self.order_warehouse_invoice_path.setStyleSheet(compact_input_style)
+        self.order_warehouse_invoice_path.setMinimumHeight(28)
+
+        self.order_pick_electronic_invoice_btn = QPushButton("Chọn file")
+        self.order_open_electronic_invoice_btn = QPushButton("Mở")
+        self.order_clear_electronic_invoice_btn = QPushButton("Xóa")
+        self.order_pick_warehouse_invoice_btn = QPushButton("Chọn file")
+        self.order_open_warehouse_invoice_btn = QPushButton("Mở")
+        self.order_clear_warehouse_invoice_btn = QPushButton("Xóa")
+
+        for button in [
+            self.order_pick_electronic_invoice_btn,
+            self.order_open_electronic_invoice_btn,
+            self.order_clear_electronic_invoice_btn,
+            self.order_pick_warehouse_invoice_btn,
+            self.order_open_warehouse_invoice_btn,
+            self.order_clear_warehouse_invoice_btn,
+        ]:
+            button.setMinimumHeight(28)
+            button.setStyleSheet("padding: 4px 10px;")
+
+        self.order_pick_electronic_invoice_btn.clicked.connect(
+            lambda: self._select_order_attachment(
+                self.order_electronic_invoice_path,
+                "Chọn file hóa đơn điện tử",
+            )
+        )
+        self.order_open_electronic_invoice_btn.clicked.connect(
+            lambda: self._open_order_attachment(
+                self.order_electronic_invoice_path.text().strip(),
+                "file hóa đơn điện tử",
+            )
+        )
+        self.order_clear_electronic_invoice_btn.clicked.connect(
+            lambda: self.order_electronic_invoice_path.clear()
+        )
+
+        self.order_pick_warehouse_invoice_btn.clicked.connect(
+            lambda: self._select_order_attachment(
+                self.order_warehouse_invoice_path,
+                "Chọn file hóa đơn xuất kho",
+            )
+        )
+        self.order_open_warehouse_invoice_btn.clicked.connect(
+            lambda: self._open_order_attachment(
+                self.order_warehouse_invoice_path.text().strip(),
+                "file hóa đơn xuất kho",
+            )
+        )
+        self.order_clear_warehouse_invoice_btn.clicked.connect(
+            lambda: self.order_warehouse_invoice_path.clear()
+        )
+
+        attachment_grid.addWidget(QLabel("Hóa đơn điện tử"), 0, 0)
+        attachment_grid.addWidget(self.order_electronic_invoice_path, 0, 1)
+        attachment_grid.addWidget(self.order_pick_electronic_invoice_btn, 0, 2)
+        attachment_grid.addWidget(self.order_open_electronic_invoice_btn, 0, 3)
+        attachment_grid.addWidget(self.order_clear_electronic_invoice_btn, 0, 4)
+
+        attachment_grid.addWidget(QLabel("Hóa đơn xuất kho"), 1, 0)
+        attachment_grid.addWidget(self.order_warehouse_invoice_path, 1, 1)
+        attachment_grid.addWidget(self.order_pick_warehouse_invoice_btn, 1, 2)
+        attachment_grid.addWidget(self.order_open_warehouse_invoice_btn, 1, 3)
+        attachment_grid.addWidget(self.order_clear_warehouse_invoice_btn, 1, 4)
+        attachment_grid.setColumnStretch(1, 1)
+
+        self.attachment_box = attachment_box
+        self.attachment_grid = attachment_grid
+        layout.addWidget(attachment_box)
+
         add_item_box = QGroupBox("Thêm hàng hóa")
         add_item_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         add_item_box.setStyleSheet(compact_group_style)
@@ -491,6 +584,8 @@ class MainWindow(QMainWindow):
             self.order_email,
             self.order_tax_code,
             self.order_note,
+            self.order_electronic_invoice_path,
+            self.order_warehouse_invoice_path,
             self.search_product_edit,
             self.order_qty_spin,
             self.order_price_spin,
@@ -1077,6 +1172,8 @@ class MainWindow(QMainWindow):
         self.order_email.setText(str(invoice.get("email", "") or ""))
         self.order_tax_code.setText(str(invoice.get("tax_code", "") or ""))
         self.order_seller.setText(str(invoice.get("seller_name", "Cửa hàng") or "Cửa hàng"))
+        self.order_electronic_invoice_path.setText(str(invoice.get("electronic_invoice_path", "") or ""))
+        self.order_warehouse_invoice_path.setText(str(invoice.get("warehouse_invoice_path", "") or ""))
         self._suspend_customer_search = False
 
         self.customer_suggestion_list.clear()
@@ -1116,6 +1213,7 @@ class MainWindow(QMainWindow):
 
         try:
             self.order_controller.delete_invoice(invoice_no)
+            delete_invoice_attachment_dir(invoice_no)
             self.refresh_products()
             self.refresh_report()
             QMessageBox.information(self, "Đã xóa", f"Hóa đơn {invoice_no} đã được xóa thành công")
@@ -1738,11 +1836,48 @@ class MainWindow(QMainWindow):
             "email": customer_data["email"],
             "tax_code": customer_data["tax_code"],
             "address": customer_data["address"],
+            "electronic_invoice_path": self.order_electronic_invoice_path.text().strip(),
+            "warehouse_invoice_path": self.order_warehouse_invoice_path.text().strip(),
             "goods_amount": total_goods,
             "ship_fee": ship_fee,
             "total_amount": total_all,
         }
         return customer_data, document_data, export_lines
+
+    def _select_order_attachment(self, target_input: QLineEdit, title: str) -> None:
+        current_path = target_input.text().strip()
+        if current_path:
+            initial_dir = str(Path(current_path).expanduser().parent)
+        else:
+            initial_dir = str(self.invoice_export_dir)
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            title,
+            initial_dir,
+            "Tất cả file (*)",
+        )
+        if file_path:
+            target_input.setText(file_path)
+
+    def _open_order_attachment(self, file_path: str, attachment_label: str) -> None:
+        normalized_path = file_path.strip()
+        if not normalized_path:
+            QMessageBox.information(self, "Chưa có file", f"Bạn chưa chọn {attachment_label}.")
+            return
+
+        attachment_path = Path(normalized_path)
+        if not attachment_path.exists():
+            QMessageBox.warning(
+                self,
+                "Không tìm thấy file",
+                f"Không tìm thấy {attachment_label} tại:\n{attachment_path}",
+            )
+            return
+
+        open_error = self._open_exported_document(attachment_path)
+        if open_error:
+            QMessageBox.warning(self, "Không thể mở file", open_error)
 
     def _show_document_preview(
         self,
@@ -1811,6 +1946,8 @@ class MainWindow(QMainWindow):
         self.order_tax_code.clear()
         self.order_seller.setText("Cửa hàng")
         self.order_note.clear()
+        self.order_electronic_invoice_path.clear()
+        self.order_warehouse_invoice_path.clear()
         self.customer_suggestion_list.clear()
         self.customer_suggestion_list.hide()
         self._reset_add_item_inputs()
@@ -1917,6 +2054,8 @@ class MainWindow(QMainWindow):
         self.order_tax_code.setText(str(quotation.get("tax_code", "") or ""))
         self.order_seller.setText(str(quotation.get("seller_name", "Cửa hàng") or "Cửa hàng"))
         self.order_note.setText(str(quotation.get("note", "") or ""))
+        self.order_electronic_invoice_path.clear()
+        self.order_warehouse_invoice_path.clear()
         self._suspend_customer_search = False
 
         self.customer_suggestion_list.clear()
@@ -2050,6 +2189,7 @@ class MainWindow(QMainWindow):
             self._confirm_update_invoice()
             return
 
+        created_attachment_paths: list[Path] = []
         try:
             invoice_no = self.order_controller.generate_invoice_no()
             customer_data, invoice_data, export_lines = self._build_order_document_data(invoice_no=invoice_no)
@@ -2064,18 +2204,24 @@ class MainWindow(QMainWindow):
                 output_name=build_invoice_output_name(invoice_no, customer_data.get("full_name", "")),
             )
             try:
+                managed_invoice_data, created_attachment_paths, kept_attachment_paths = stage_invoice_attachments(
+                    invoice_no,
+                    invoice_data,
+                )
                 if self._editing_quotation_id is None:
-                    self.order_controller.create_invoice(customer_data, invoice_data, export_lines)
+                    self.order_controller.create_invoice(customer_data, managed_invoice_data, export_lines)
                 else:
                     self.order_controller.update_quotation(
                         self._editing_quotation_id,
                         customer_data,
-                        invoice_data,
+                        managed_invoice_data,
                         export_lines,
                     )
                     self.order_controller.export_quotation_to_invoice(self._editing_quotation_id, invoice_no)
+                cleanup_obsolete_invoice_attachments(invoice_no, kept_attachment_paths)
             except Exception:
                 self._remove_exported_file(export_path)
+                remove_staged_invoice_attachments(created_attachment_paths)
                 raise
 
             self._warn_open_export_failure(export_path)
@@ -2083,12 +2229,14 @@ class MainWindow(QMainWindow):
             self.refresh_products()
             self.refresh_report()
         except Exception as exc:  # pragma: no cover - dialog feedback
+            remove_staged_invoice_attachments(created_attachment_paths)
             QMessageBox.critical(self, "Lỗi", str(exc))
 
     def _confirm_update_invoice(self) -> None:
         invoice_no = self._editing_invoice_no
         if not invoice_no:
             return
+        created_attachment_paths: list[Path] = []
         try:
             customer_data, invoice_data, export_lines = self._build_order_document_data(invoice_no=invoice_no)
             if not self._show_document_preview(
@@ -2107,9 +2255,15 @@ class MainWindow(QMainWindow):
                 output_name=build_invoice_output_name(invoice_no, customer_data.get("full_name", "")),
             )
             try:
-                self.order_controller.update_invoice(invoice_no, customer_data, invoice_data, export_lines)
+                managed_invoice_data, created_attachment_paths, kept_attachment_paths = stage_invoice_attachments(
+                    invoice_no,
+                    invoice_data,
+                )
+                self.order_controller.update_invoice(invoice_no, customer_data, managed_invoice_data, export_lines)
+                cleanup_obsolete_invoice_attachments(invoice_no, kept_attachment_paths)
             except Exception:
                 self._remove_exported_file(export_path)
+                remove_staged_invoice_attachments(created_attachment_paths)
                 raise
 
             self._warn_open_export_failure(export_path)
@@ -2118,6 +2272,7 @@ class MainWindow(QMainWindow):
             self.refresh_report()
             QMessageBox.information(self, "Thành công", f"Hóa đơn {invoice_no} đã được cập nhật")
         except Exception as exc:
+            remove_staged_invoice_attachments(created_attachment_paths)
             QMessageBox.critical(self, "Lỗi", str(exc))
 
     def refresh_products(self) -> None:

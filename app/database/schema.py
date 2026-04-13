@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS invoices (
     email TEXT,
     tax_code TEXT,
     address TEXT,
+    electronic_invoice_path TEXT,
+    warehouse_invoice_path TEXT,
     total_amount INTEGER NOT NULL
 );
 
@@ -220,6 +222,8 @@ REQUIRED_TABLE_COLUMNS = {
         "email": "TEXT",
         "tax_code": "TEXT",
         "address": "TEXT",
+        "electronic_invoice_path": "TEXT",
+        "warehouse_invoice_path": "TEXT",
         "total_amount": "INTEGER NOT NULL",
     },
     "quotations": {

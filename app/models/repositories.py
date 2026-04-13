@@ -583,8 +583,9 @@ class InvoiceRepository:
         conn.execute(
             """
             INSERT INTO invoices (
-                invoice_no, created_at, customer_name, seller_name, phone, email, tax_code, address, total_amount
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                invoice_no, created_at, customer_name, seller_name, phone, email, tax_code, address,
+                electronic_invoice_path, warehouse_invoice_path, total_amount
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["invoice_no"],
@@ -595,6 +596,8 @@ class InvoiceRepository:
                 payload.get("email", ""),
                 payload.get("tax_code", ""),
                 payload.get("address", ""),
+                payload.get("electronic_invoice_path", ""),
+                payload.get("warehouse_invoice_path", ""),
                 int(payload["total_amount"]),
             ),
         )
@@ -1028,7 +1031,18 @@ class InvoiceRepository:
         with get_connection() as conn:
             invoice = conn.execute(
                 """
-                SELECT invoice_no, created_at, customer_name, seller_name, phone, email, tax_code, address, total_amount
+                SELECT
+                    invoice_no,
+                    created_at,
+                    customer_name,
+                    seller_name,
+                    phone,
+                    email,
+                    tax_code,
+                    address,
+                    electronic_invoice_path,
+                    warehouse_invoice_path,
+                    total_amount
                 FROM invoices
                 WHERE invoice_no = ?
                 """,
@@ -1096,6 +1110,8 @@ class InvoiceRepository:
                     email = ?,
                     tax_code = ?,
                     address = ?,
+                    electronic_invoice_path = ?,
+                    warehouse_invoice_path = ?,
                     total_amount = ?
                 WHERE invoice_no = ?
                 """,
@@ -1107,6 +1123,8 @@ class InvoiceRepository:
                     payload.get("email", ""),
                     payload.get("tax_code", ""),
                     payload.get("address", ""),
+                    payload.get("electronic_invoice_path", ""),
+                    payload.get("warehouse_invoice_path", ""),
                     int(payload["total_amount"]),
                     invoice_no,
                 ),

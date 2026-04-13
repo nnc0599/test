@@ -8,6 +8,12 @@ from app.database import connection
 from app.database.connection import get_connection
 from app.database.schema import init_schema
 from app.models.repositories import InvoiceRepository
+from app.utils.invoice_attachments import (
+    cleanup_obsolete_invoice_attachments,
+    delete_invoice_attachment_dir,
+    invoice_attachment_dir,
+    stage_invoice_attachments,
+)
 
 
 class QuotationInventoryTests(unittest.TestCase):
@@ -190,6 +196,123 @@ class QuotationInventoryTests(unittest.TestCase):
         self.assertEqual(exported_row["exported_invoice_no"], "000001")
         self.assertIsNotNone(invoice_row)
         self.assertEqual(invoice_row["seller_name"], "Nhân viên C")
+
+    def test_create_and_update_invoice_persist_attachment_paths(self) -> None:
+        repo = InvoiceRepository()
+
+        repo.create_invoice(
+            {
+                "invoice_no": "000123",
+                "created_at": "2026-03-19 12:00:00",
+                "customer_name": "Khach A",
+                "phone": "0900000003",
+                "email": "",
+                "tax_code": "",
+                "address": "Dia chi A",
+                "seller_name": "Nhân viên D",
+                "electronic_invoice_path": "/tmp/hoa_don_dien_tu.pdf",
+                "warehouse_invoice_path": "/tmp/hoa_don_xuat_kho.pdf",
+                "total_amount": 2000,
+                "paid_amount": 0,
+                "payment_date": "2026-03-19 12:00:00",
+            },
+            [
+                {
+                    "product_code": "SP_TEST",
+                    "product_name": "Test Product",
+                    "unit": "cai",
+                    "quantity": 2,
+                    "unit_price": 1000,
+                    "line_total": 2000,
+                }
+            ],
+        )
+
+        created_detail = repo.get_invoice_detail("000123")
+        self.assertIsNotNone(created_detail)
+        self.assertEqual(created_detail["invoice"]["electronic_invoice_path"], "/tmp/hoa_don_dien_tu.pdf")
+        self.assertEqual(created_detail["invoice"]["warehouse_invoice_path"], "/tmp/hoa_don_xuat_kho.pdf")
+
+        repo.update_invoice(
+            "000123",
+            {
+                "created_at": "2026-03-19 12:30:00",
+                "customer_name": "Khach A",
+                "phone": "0900000003",
+                "email": "",
+                "tax_code": "",
+                "address": "Dia chi B",
+                "seller_name": "Nhân viên E",
+                "electronic_invoice_path": "/tmp/hoa_don_dien_tu_v2.pdf",
+                "warehouse_invoice_path": "",
+                "total_amount": 3000,
+                "paid_amount": 0,
+                "payment_date": "2026-03-19 12:30:00",
+            },
+            [
+                {
+                    "product_code": "SP_TEST",
+                    "product_name": "Test Product",
+                    "unit": "cai",
+                    "quantity": 3,
+                    "unit_price": 1000,
+                    "line_total": 3000,
+                }
+            ],
+        )
+
+        updated_detail = repo.get_invoice_detail("000123")
+        self.assertIsNotNone(updated_detail)
+        self.assertEqual(updated_detail["invoice"]["electronic_invoice_path"], "/tmp/hoa_don_dien_tu_v2.pdf")
+        self.assertEqual(updated_detail["invoice"]["warehouse_invoice_path"], "")
+
+    def test_stage_invoice_attachments_copies_into_app_data_dir(self) -> None:
+        source_electronic = Path(self._temp_dir.name) / "hoa_don_dien_tu.pdf"
+        source_warehouse = Path(self._temp_dir.name) / "hoa_don_xuat_kho.pdf"
+        source_electronic.write_text("electronic", encoding="utf-8")
+        source_warehouse.write_text("warehouse", encoding="utf-8")
+
+        staged_data, created_paths, kept_paths = stage_invoice_attachments(
+            "000456",
+            {
+                "electronic_invoice_path": str(source_electronic),
+                "warehouse_invoice_path": str(source_warehouse),
+            },
+        )
+
+        electronic_copy = Path(staged_data["electronic_invoice_path"])
+        warehouse_copy = Path(staged_data["warehouse_invoice_path"])
+        target_dir = invoice_attachment_dir("000456")
+
+        self.assertTrue(electronic_copy.exists())
+        self.assertTrue(warehouse_copy.exists())
+        self.assertEqual(electronic_copy.parent, target_dir)
+        self.assertEqual(warehouse_copy.parent, target_dir)
+        self.assertEqual(len(created_paths), 2)
+        self.assertEqual(len(kept_paths), 2)
+        self.assertEqual(electronic_copy.read_text(encoding="utf-8"), "electronic")
+        self.assertEqual(warehouse_copy.read_text(encoding="utf-8"), "warehouse")
+
+        replacement_electronic = Path(self._temp_dir.name) / "hoa_don_dien_tu_moi.pdf"
+        replacement_electronic.write_text("electronic-v2", encoding="utf-8")
+        restaged_data, _, new_kept_paths = stage_invoice_attachments(
+            "000456",
+            {
+                "electronic_invoice_path": str(replacement_electronic),
+                "warehouse_invoice_path": "",
+            },
+        )
+
+        cleanup_obsolete_invoice_attachments("000456", new_kept_paths)
+
+        new_electronic_copy = Path(restaged_data["electronic_invoice_path"])
+        self.assertTrue(new_electronic_copy.exists())
+        self.assertEqual(new_electronic_copy.read_text(encoding="utf-8"), "electronic-v2")
+        self.assertFalse(electronic_copy.exists())
+        self.assertFalse(warehouse_copy.exists())
+
+        delete_invoice_attachment_dir("000456")
+        self.assertFalse(target_dir.exists())
 
 
 if __name__ == "__main__":
