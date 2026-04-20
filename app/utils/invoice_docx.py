@@ -672,6 +672,29 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
     )
 
     total_amount = int(invoice.get("total_amount", 0))
+    remain_amount = total_amount
+    
+    if document_kind in ("order", "invoice"):
+        paid_amount = int(invoice.get("paid_amount", 0))
+        remain_amount = max(0, total_amount - paid_amount)
+        
+        item_rows += f"""
+        <tr class="total-row">
+            <td class="total-label" colspan="3">Số tiền đã cọc</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>{format_money(paid_amount)}</td>
+        </tr>
+        <tr class="total-row">
+            <td class="total-label" colspan="3">Còn phải thanh toán</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>{format_money(remain_amount)}</td>
+        </tr>
+        """
+        
     return f"""
         <html>
             <head>
@@ -879,7 +902,7 @@ def build_invoice_preview_html(invoice: dict, items: list[dict], document_kind: 
                         </tbody>
                     </table>
 
-                    <div class="money-words"><strong>Số tiền viết bằng chữ:</strong> {escape(money_to_vietnamese(total_amount))}</div>
+                    <div class="money-words"><strong>Số tiền viết bằng chữ:</strong> {escape(money_to_vietnamese(remain_amount))}</div>
 
                     <table class="signatures">
                         <tr>
@@ -959,10 +982,16 @@ def export_invoice_docx(
     invoice_paragraph._p.addnext(customer_table._tbl)
     _remove_paragraph(email_paragraph)
     _remove_paragraph(address_paragraph)
+    
+    total_amount = int(invoice.get("total_amount", 0))
+    remain_amount = total_amount
+    if document_kind in ("order", "invoice"):
+        paid_amount = int(invoice.get("paid_amount", 0))
+        remain_amount = max(0, total_amount - paid_amount)
 
     _set_paragraph_text(
         money_words_paragraph,
-        f"Số tiền viết bằng chữ: {money_to_vietnamese(int(invoice.get('total_amount', 0)))}",
+        f"Số tiền viết bằng chữ: {money_to_vietnamese(remain_amount)}",
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
         italic=True,
     )
