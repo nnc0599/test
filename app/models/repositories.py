@@ -843,11 +843,11 @@ class InvoiceRepository:
                 (export_path, quotation_id),
             )
 
-    def list_recent_quotations(self, limit: int = 50) -> list[dict]:
+    def list_recent_quotations(self, limit: int = 150) -> list[dict]:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT id, customer_name, seller_name, note, phone, goods_amount, total_amount, created_at
+                SELECT id, customer_name, seller_name, note, phone, goods_amount, total_amount, created_at, doc_type
                 FROM quotations
                 WHERE status = 'pending'
                 ORDER BY created_at DESC, id DESC
