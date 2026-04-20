@@ -579,7 +579,7 @@ class InvoiceRepository:
 
         return f"{max_number + 1:06d}"
 
-    def _insert_invoice_records(self, conn, payload: dict, lines: list[dict]) -> None:
+    def _insert_invoice_records(self, conn, payload: dict, lines: list[dict], skip_stock_deduction: bool = False) -> None:
         total = max(0, int(payload["total_amount"]))
         paid_amount = min(max(int(payload.get("paid_amount", 0)), 0), total)
 
@@ -622,19 +622,20 @@ class InvoiceRepository:
             ],
         )
 
-        for line in lines:
-            cursor = conn.execute(
-                """
-                UPDATE products
-                SET quantity = quantity - ?
-                WHERE product_code = ? AND quantity >= ?
-                """,
-                (line["quantity"], line["product_code"], line["quantity"]),
-            )
-            if cursor.rowcount == 0:
-                raise ValueError(
-                    f"Sản phẩm {line['product_code']} không đủ số lượng để xuất kho."
+        if not skip_stock_deduction:
+            for line in lines:
+                cursor = conn.execute(
+                    """
+                    UPDATE products
+                    SET quantity = quantity - ?
+                    WHERE product_code = ? AND quantity >= ?
+                    """,
+                    (line["quantity"], line["product_code"], line["quantity"]),
                 )
+                if cursor.rowcount == 0:
+                    raise ValueError(
+                        f"Sản phẩm {line['product_code']} không đủ số lượng để xuất kho."
+                    )
 
         conn.execute(
             """
@@ -720,22 +721,47 @@ class InvoiceRepository:
                     for line in lines
                 ],
             )
+            
+            if payload.get("doc_type", "quotation") == "order":
+                for line in lines:
+                    cursor_prod = conn.execute(
+                        """
+                        UPDATE products
+                        SET quantity = quantity - ?
+                        WHERE product_code = ? AND quantity >= ?
+                        """,
+                        (int(line["quantity"]), line["product_code"], int(line["quantity"])),
+                    )
+                    if cursor_prod.rowcount == 0:
+                        raise ValueError(f"Sản phẩm {line['product_code']} không đủ số lượng để xuất/đặt hàng.")
             return quotation_id
 
     def update_quotation(self, quotation_id: int, payload: dict, lines: list[dict]) -> None:
         with get_connection() as conn:
             existing = conn.execute(
                 """
-                SELECT id, status
+                SELECT id, status, doc_type
                 FROM quotations
                 WHERE id = ?
                 """,
                 (quotation_id,),
             ).fetchone()
             if not existing:
-                raise ValueError("Không tìm thấy bản báo giá")
+                raise ValueError("Không tìm thấy bản báo giá/đơn đặt hàng")
             if str(existing["status"] or "") != "pending":
-                raise ValueError("Bản báo giá này không còn khả dụng để chỉnh sửa")
+                raise ValueError("Chứng từ này không còn khả dụng để chỉnh sửa")
+
+            # Restore old stock if it was an order
+            if existing["doc_type"] == "order":
+                old_items = conn.execute(
+                    "SELECT product_code, quantity FROM quotation_items WHERE quotation_id = ?",
+                    (quotation_id,),
+                ).fetchall()
+                for old_item in old_items:
+                    conn.execute(
+                        "UPDATE products SET quantity = quantity + ? WHERE product_code = ?",
+                        (int(old_item["quantity"]), old_item["product_code"]),
+                    )
 
             conn.execute(
                 """
@@ -796,6 +822,19 @@ class InvoiceRepository:
                     for line in lines
                 ],
             )
+            
+            if payload.get("doc_type", "quotation") == "order":
+                for line in lines:
+                    cursor_prod = conn.execute(
+                        """
+                        UPDATE products
+                        SET quantity = quantity - ?
+                        WHERE product_code = ? AND quantity >= ?
+                        """,
+                        (int(line["quantity"]), line["product_code"], int(line["quantity"])),
+                    )
+                    if cursor_prod.rowcount == 0:
+                        raise ValueError(f"Sản phẩm {line['product_code']} không đủ số lượng để xuất/đặt hàng.")
 
     def update_quotation_export_path(self, quotation_id: int, export_path: str) -> None:
         with get_connection() as conn:
@@ -871,6 +910,20 @@ class InvoiceRepository:
 
     def delete_quotation(self, quotation_id: int) -> None:
         with get_connection() as conn:
+            existing = conn.execute(
+                "SELECT doc_type FROM quotations WHERE id = ?",
+                (quotation_id,)
+            ).fetchone()
+            if existing and existing["doc_type"] == "order":
+                old_items = conn.execute(
+                    "SELECT product_code, quantity FROM quotation_items WHERE quotation_id = ?",
+                    (quotation_id,),
+                ).fetchall()
+                for old_item in old_items:
+                    conn.execute(
+                        "UPDATE products SET quantity = quantity + ? WHERE product_code = ?",
+                        (int(old_item["quantity"]), old_item["product_code"]),
+                    )
             conn.execute("DELETE FROM quotations WHERE id = ?", (quotation_id,))
 
     def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str) -> None:
@@ -888,6 +941,7 @@ class InvoiceRepository:
                     address,
                     total_amount,
                     paid_amount,
+                    doc_type,
                     status
                 FROM quotations
                 WHERE id = ?
@@ -895,9 +949,9 @@ class InvoiceRepository:
                 (quotation_id,),
             ).fetchone()
             if not quotation:
-                raise ValueError("Không tìm thấy bản báo giá")
+                raise ValueError("Không tìm thấy chứng từ")
             if str(quotation["status"] or "") != "pending":
-                raise ValueError("Bản báo giá này không còn khả dụng để xuất hóa đơn")
+                raise ValueError("Chứng từ này không còn khả dụng để xuất hóa đơn")
 
             items = conn.execute(
                 """
@@ -936,7 +990,11 @@ class InvoiceRepository:
                 "paid_amount": paid_amount,
                 "payment_date": quotation["created_at"],
             }
-            self._insert_invoice_records(conn, payload, item_rows)
+            if str(quotation["doc_type"] or "quotation") == "order":
+                # Already deducted when saving the order, so bypass stock deduction in invoice creation
+                self._insert_invoice_records(conn, payload, item_rows, skip_stock_deduction=True)
+            else:
+                self._insert_invoice_records(conn, payload, item_rows)
             conn.execute(
                 """
                 UPDATE quotations
