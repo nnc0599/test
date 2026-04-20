@@ -399,53 +399,40 @@ class MainWindow(QMainWindow):
 
         self.payment_box = QGroupBox("Tổng tiền hóa đơn")
         self.payment_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        payment_layout = QVBoxLayout(self.payment_box)
+        payment_layout = QHBoxLayout(self.payment_box)
         payment_layout.setContentsMargins(6, 4, 6, 4)
-        payment_layout.setSpacing(2)
+        payment_layout.setSpacing(10)
 
         self.total_all_text_label = QLabel("Tổng số tiền:")
         self.total_all_label = QLabel("0")
+        self.total_all_label.setStyleSheet("color: #D97706;")
         
         self.deposit_text_label = QLabel("Số tiền đặt cọc:")
         self.deposit_edit = QLineEdit("0")
-        self.deposit_edit.setFixedWidth(150)
+        self.deposit_edit.setFixedWidth(130)
         self.deposit_edit.textChanged.connect(self._on_deposit_changed)
         
         self.remain_text_label = QLabel("Còn phải thanh toán:")
         self.remain_amount_label = QLabel("0")
+        self.remain_amount_label.setStyleSheet("color: #E11D48;")
 
         self.total_all_text_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.total_all_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        total_row = QHBoxLayout()
-        total_row.setContentsMargins(0, 0, 0, 0)
-        total_row.setSpacing(4)
-        total_row.addWidget(self.total_all_text_label)
-        total_row.addWidget(self.total_all_label)
-        total_row.addStretch(1)
+        payment_layout.addWidget(self.total_all_text_label)
+        payment_layout.addWidget(self.total_all_label)
+        payment_layout.addStretch(1)
 
-        deposit_row = QHBoxLayout()
-        deposit_row.setContentsMargins(0, 0, 0, 0)
-        deposit_row.setSpacing(4)
-        deposit_row.addWidget(self.deposit_text_label)
-        deposit_row.addWidget(self.deposit_edit)
-        deposit_row.addStretch(1)
+        payment_layout.addWidget(self.deposit_text_label)
+        payment_layout.addWidget(self.deposit_edit)
+        payment_layout.addStretch(1)
 
-        remain_row = QHBoxLayout()
-        remain_row.setContentsMargins(0, 0, 0, 0)
-        remain_row.setSpacing(4)
-        remain_row.addWidget(self.remain_text_label)
-        remain_row.addWidget(self.remain_amount_label)
-        remain_row.addStretch(1)
-
-        payment_layout.addLayout(total_row)
-        payment_layout.addLayout(deposit_row)
-        payment_layout.addLayout(remain_row)
+        payment_layout.addWidget(self.remain_text_label)
+        payment_layout.addWidget(self.remain_amount_label)
 
         self._apply_payment_summary_fonts()
 
         self.payment_layout = payment_layout
-        self.total_row = total_row
         layout.addWidget(self.payment_box)
 
         self.export_location_box = QGroupBox("Nơi lưu file hóa đơn / báo giá")
@@ -2596,6 +2583,16 @@ class MainWindow(QMainWindow):
             self.total_all_text_label.setFont(label_font)
         if getattr(self, "total_all_label", None) is not None:
             self.total_all_label.setFont(amount_font)
+            
+        if getattr(self, "deposit_text_label", None) is not None:
+            self.deposit_text_label.setFont(label_font)
+        if getattr(self, "deposit_edit", None) is not None:
+            self.deposit_edit.setFont(amount_font)
+            
+        if getattr(self, "remain_text_label", None) is not None:
+            self.remain_text_label.setFont(label_font)
+        if getattr(self, "remain_amount_label", None) is not None:
+            self.remain_amount_label.setFont(amount_font)
 
         export_box_font = QFont(base_font)
         export_box_font.setPixelSize(base_px + 1)
