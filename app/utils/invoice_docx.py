@@ -32,6 +32,12 @@ DOCUMENT_VARIANTS = {
         "window_title": "Xem trước bản báo giá A4",
         "hint": "Xem trước bản báo giá trên khổ giấy A4 trước khi lưu file Word",
     },
+    "order": {
+        "title": "ĐƠN ĐẶT HÀNG",
+        "confirm_text": "Lưu đơn đặt hàng",
+        "window_title": "Xem trước đơn đặt hàng A4",
+        "hint": "Xem trước đơn đặt hàng trên khổ giấy A4 trước khi lưu file Word",
+    },
 }
 
     
@@ -139,6 +145,12 @@ def build_quotation_output_name(customer_name: str, created_at: str) -> str:
     safe_name = _sanitize_file_stem(customer_name or "Khach hang")
     timestamp = created_time.strftime("%Y%m%d_%H%M")
     return f"{timestamp} - {safe_name}.docx"
+
+def build_order_output_name(customer_name: str, created_at: str) -> str:
+    created_time = _parse_created_at(created_at)
+    safe_name = _sanitize_file_stem(customer_name or "Khach hang")
+    timestamp = created_time.strftime("%Y%m%d_%H%M")
+    return f"Don hang {timestamp} - {safe_name}.docx"
 
 
 def build_invoice_output_name(invoice_no: str, customer_name: str) -> str:
@@ -974,7 +986,24 @@ def export_invoice_docx(
 
     total_row = items_table.rows[len(sorted_items) + 1]
     _set_cell_text(total_row.cells[0], "Tổng thanh toán", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
-    _set_cell_text(total_row.cells[6], format_money(int(invoice.get("total_amount", 0))), alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+    total_amount = int(invoice.get("total_amount", 0))
+    _set_cell_text(total_row.cells[6], format_money(total_amount), alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+
+    if document_kind in ("order", "invoice"):
+        paid_amount = int(invoice.get("paid_amount", 0))
+        remain_amount = max(0, total_amount - paid_amount)
+
+        deposit_tr = deepcopy(total_row._tr)
+        items_table._tbl.append(deposit_tr)
+        deposit_row = items_table.rows[-1]
+        _set_cell_text(deposit_row.cells[0], "Số tiền đã cọc", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+        _set_cell_text(deposit_row.cells[6], format_money(paid_amount), alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+
+        remain_tr = deepcopy(total_row._tr)
+        items_table._tbl.append(remain_tr)
+        remain_row = items_table.rows[-1]
+        _set_cell_text(remain_row.cells[0], "Còn phải thanh toán", alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
+        _set_cell_text(remain_row.cells[6], format_money(remain_amount), alignment=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
 
     save_dir = output_dir or EXPORT_DIR
     save_dir.mkdir(parents=True, exist_ok=True)

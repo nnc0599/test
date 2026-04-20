@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS quotations (
     paid_amount INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'pending',
     export_path TEXT,
-    exported_invoice_no TEXT
+    exported_invoice_no TEXT,
+    doc_type TEXT NOT NULL DEFAULT 'quotation'
 );
 
 CREATE TABLE IF NOT EXISTS invoice_items (
@@ -240,6 +241,7 @@ REQUIRED_TABLE_COLUMNS = {
         "status": "TEXT NOT NULL DEFAULT 'pending'",
         "export_path": "TEXT",
         "exported_invoice_no": "TEXT",
+        "doc_type": "TEXT NOT NULL DEFAULT 'quotation'",
     },
     "invoice_items": {
         "id": "INTEGER",

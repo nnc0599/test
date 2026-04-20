@@ -403,8 +403,17 @@ class MainWindow(QMainWindow):
         payment_layout.setContentsMargins(6, 4, 6, 4)
         payment_layout.setSpacing(2)
 
-        self.total_all_text_label = QLabel("Tổng số tiền")
+        self.total_all_text_label = QLabel("Tổng số tiền:")
         self.total_all_label = QLabel("0")
+        
+        self.deposit_text_label = QLabel("Số tiền đặt cọc:")
+        self.deposit_edit = QLineEdit("0")
+        self.deposit_edit.setFixedWidth(150)
+        self.deposit_edit.textChanged.connect(self._on_deposit_changed)
+        
+        self.remain_text_label = QLabel("Còn phải thanh toán:")
+        self.remain_amount_label = QLabel("0")
+
         self.total_all_text_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.total_all_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
@@ -415,7 +424,23 @@ class MainWindow(QMainWindow):
         total_row.addWidget(self.total_all_label)
         total_row.addStretch(1)
 
+        deposit_row = QHBoxLayout()
+        deposit_row.setContentsMargins(0, 0, 0, 0)
+        deposit_row.setSpacing(4)
+        deposit_row.addWidget(self.deposit_text_label)
+        deposit_row.addWidget(self.deposit_edit)
+        deposit_row.addStretch(1)
+
+        remain_row = QHBoxLayout()
+        remain_row.setContentsMargins(0, 0, 0, 0)
+        remain_row.setSpacing(4)
+        remain_row.addWidget(self.remain_text_label)
+        remain_row.addWidget(self.remain_amount_label)
+        remain_row.addStretch(1)
+
         payment_layout.addLayout(total_row)
+        payment_layout.addLayout(deposit_row)
+        payment_layout.addLayout(remain_row)
 
         self._apply_payment_summary_fonts()
 
@@ -451,11 +476,15 @@ class MainWindow(QMainWindow):
 
         self.save_quote_btn = QPushButton("Lưu bản báo giá")
         self.view_quote_btn = QPushButton("Xem bản báo giá")
+        self.save_order_btn = QPushButton("Lưu đơn đặt hàng")
+        self.view_order_btn = QPushButton("Xem đơn đặt hàng")
         self.export_btn = QPushButton("Xuất hóa đơn")
 
-        self.save_quote_btn.setMinimumHeight(50)
-        self.view_quote_btn.setMinimumHeight(50)
-        self.export_btn.setMinimumHeight(50)
+        self.save_quote_btn.setMinimumHeight(40)
+        self.view_quote_btn.setMinimumHeight(40)
+        self.save_order_btn.setMinimumHeight(40)
+        self.view_order_btn.setMinimumHeight(40)
+        self.export_btn.setMinimumHeight(40)
 
         self.save_quote_btn.setStyleSheet(
             "QPushButton { background: #F59E0B; color: white; font-weight: 900; }"
@@ -467,6 +496,16 @@ class MainWindow(QMainWindow):
             "QPushButton:hover { background: #6D28D9; }"
             "QPushButton:pressed { background: #5B21B6; }"
         )
+        self.save_order_btn.setStyleSheet(
+            "QPushButton { background: #10B981; color: white; font-weight: 900; }"
+            "QPushButton:hover { background: #059669; }"
+            "QPushButton:pressed { background: #047857; }"
+        )
+        self.view_order_btn.setStyleSheet(
+            "QPushButton { background: #6366F1; color: white; font-weight: 900; }"
+            "QPushButton:hover { background: #4F46E5; }"
+            "QPushButton:pressed { background: #4338CA; }"
+        )
         self.export_btn.setStyleSheet(
             "QPushButton { background: #0EA5E9; color: white; font-weight: 900; }"
             "QPushButton:hover { background: #0284C7; }"
@@ -475,10 +514,14 @@ class MainWindow(QMainWindow):
 
         self.save_quote_btn.clicked.connect(self._save_quotation)
         self.view_quote_btn.clicked.connect(self._open_recent_quotations)
+        self.save_order_btn.clicked.connect(self._save_order)
+        self.view_order_btn.clicked.connect(self._open_recent_orders)
         self.export_btn.clicked.connect(self._export_invoice)
 
         action_row.addWidget(self.save_quote_btn)
         action_row.addWidget(self.view_quote_btn)
+        action_row.addWidget(self.save_order_btn)
+        action_row.addWidget(self.view_order_btn)
         action_row.addWidget(self.export_btn)
         self.order_action_row = action_row
         layout.addLayout(action_row)
@@ -495,7 +538,7 @@ class MainWindow(QMainWindow):
             self.order_qty_spin,
             self.order_price_spin,
         ]
-        self._order_primary_buttons = [self.save_quote_btn, self.view_quote_btn, self.export_btn]
+        self._order_primary_buttons = [self.save_quote_btn, self.view_quote_btn, self.save_order_btn, self.view_order_btn, self.export_btn]
 
         self._sync_order_page_compact_sizes()
 
@@ -1077,6 +1120,11 @@ class MainWindow(QMainWindow):
         self.order_email.setText(str(invoice.get("email", "") or ""))
         self.order_tax_code.setText(str(invoice.get("tax_code", "") or ""))
         self.order_seller.setText(str(invoice.get("seller_name", "Cửa hàng") or "Cửa hàng"))
+        
+        self.deposit_edit.blockSignals(True)
+        self.deposit_edit.setText(format_money(int(invoice.get("paid_amount", 0) or 0)))
+        self.deposit_edit.blockSignals(False)
+        
         self._suspend_customer_search = False
 
         self.customer_suggestion_list.clear()
@@ -1702,9 +1750,34 @@ class MainWindow(QMainWindow):
         total_all = total_goods
         return total_goods, ship_fee, total_all
 
+    def _get_deposit_amount(self) -> int:
+        text = self.deposit_edit.text()
+        text = ''.join(filter(str.isdigit, text))
+        return int(text) if text else 0
+
+    def _on_deposit_changed(self, text: str) -> None:
+        clean_text = ''.join(filter(str.isdigit, text))
+        if clean_text:
+            formatted = format_money(int(clean_text))
+        else:
+            formatted = ""
+        
+        # Prevent infinite loop
+        if self.deposit_edit.text() != formatted:
+            self.deposit_edit.blockSignals(True)
+            self.deposit_edit.setText(formatted)
+            self.deposit_edit.blockSignals(False)
+            
+        self._update_invoice_totals()
+
     def _update_invoice_totals(self) -> None:
         _, _, total_all = self._calculate_invoice_totals()
         self.total_all_label.setText(format_money(total_all))
+        deposit = self._get_deposit_amount()
+        remain = total_all - deposit
+        if remain < 0:
+            remain = 0
+        self.remain_amount_label.setText(format_money(remain))
 
     def _build_order_customer_data(self) -> dict:
         return {
@@ -1727,6 +1800,7 @@ class MainWindow(QMainWindow):
 
         created_at = self.order_created_at.text().strip() or now_iso_utc7()
         total_goods, ship_fee, total_all = self._calculate_invoice_totals()
+        deposit = self._get_deposit_amount()
         export_lines = sort_items_by_unit_price_desc([dict(line) for line in self.invoice_lines])
         document_data = {
             "invoice_no": invoice_no,
@@ -1741,6 +1815,8 @@ class MainWindow(QMainWindow):
             "goods_amount": total_goods,
             "ship_fee": ship_fee,
             "total_amount": total_all,
+            "paid_amount": deposit,
+            "doc_type": "quotation"  # default, will be overridden for order
         }
         return customer_data, document_data, export_lines
 
@@ -1785,9 +1861,11 @@ class MainWindow(QMainWindow):
         self._editing_quotation_export_path = export_path
         if quotation_id is None:
             self.save_quote_btn.setText("Lưu bản báo giá")
+            self.save_order_btn.setText("Lưu đơn đặt hàng")
             self.export_btn.setText("Xuất hóa đơn")
             return
         self.save_quote_btn.setText("Cập nhật bản báo giá")
+        self.save_order_btn.setText("Cập nhật đơn đặt hàng")
         self.export_btn.setText("Xuất hóa đơn từ báo giá")
 
     def _set_invoice_editing_state(self, invoice_no: str | None) -> None:
@@ -1802,6 +1880,11 @@ class MainWindow(QMainWindow):
         self._editing_invoice_no = None
         self._order_created_at_override = None
         self.invoice_lines.clear()
+        
+        self.deposit_edit.blockSignals(True)
+        self.deposit_edit.setText("0")
+        self.deposit_edit.blockSignals(False)
+        
         self._render_invoice_lines()
         self._update_invoice_totals()
         self.order_name.clear()
@@ -1841,16 +1924,26 @@ class MainWindow(QMainWindow):
         if open_error:
             QMessageBox.warning(self, "Không thể mở file tự động", open_error)
 
+    def _save_order(self) -> None:
+        self._do_save_quotation(doc_type="order")
+
     def _save_quotation(self) -> None:
+        self._do_save_quotation(doc_type="quotation")
+
+    def _do_save_quotation(self, doc_type="quotation") -> None:
         quotation_id: int | None = None
         created_new_quotation = False
         try:
             customer_data, quotation_data, export_lines = self._build_order_document_data()
+            quotation_data["doc_type"] = doc_type
+            
+            confirm_text = ("Cập nhật đơn đặt hàng" if doc_type == "order" else "Cập nhật bản báo giá") if self._editing_quotation_id is not None else ("Lưu đơn đặt hàng" if doc_type == "order" else "Lưu bản báo giá")
+
             confirmed = self._show_document_preview(
                 quotation_data,
                 export_lines,
-                "quotation",
-                confirm_text="Cập nhật bản báo giá" if self._editing_quotation_id is not None else "Lưu bản báo giá",
+                doc_type,
+                confirm_text=confirm_text,
             )
             if not confirmed:
                 return
@@ -1863,12 +1956,18 @@ class MainWindow(QMainWindow):
                 quotation_id = self._editing_quotation_id
                 self.order_controller.update_quotation(quotation_id, customer_data, quotation_data, export_lines)
 
-            output_name = build_quotation_output_name(customer_data["full_name"], quotation_data["created_at"])
+            if doc_type == "order":
+                from app.utils.invoice_docx import build_order_output_name
+                output_name = build_order_output_name(customer_data["full_name"], quotation_data["created_at"])
+            else:
+                from app.utils.invoice_docx import build_quotation_output_name
+                output_name = build_quotation_output_name(customer_data["full_name"], quotation_data["created_at"])
+
             export_path = export_invoice_docx(
                 quotation_data,
                 export_lines,
                 self.invoice_export_dir,
-                document_kind="quotation",
+                document_kind=doc_type,
                 output_name=output_name,
             )
             self.order_controller.update_quotation_export_path(quotation_id, str(export_path))
@@ -1887,14 +1986,26 @@ class MainWindow(QMainWindow):
                     pass
             QMessageBox.critical(self, "Lỗi", str(exc))
 
-    def _open_recent_quotations(self) -> None:
+    def _open_recent_orders(self) -> None:
         dialog = RecentQuotationsDialog(
-            load_rows=lambda: self.order_controller.list_recent_quotations(100),
+            load_rows=lambda: [r for r in self.order_controller.list_recent_quotations(200) if r.get("doc_type") == "order"],
             on_edit=self._edit_quotation_from_dialog,
             on_export=self._export_quotation_from_dialog,
             on_cancel=self._cancel_quotation_from_dialog,
             parent=self,
         )
+        dialog.setWindowTitle("Đơn đặt hàng gần đây")
+        dialog.exec()
+
+    def _open_recent_quotations(self) -> None:
+        dialog = RecentQuotationsDialog(
+            load_rows=lambda: [r for r in self.order_controller.list_recent_quotations(200) if r.get("doc_type", "quotation") == "quotation"],
+            on_edit=self._edit_quotation_from_dialog,
+            on_export=self._export_quotation_from_dialog,
+            on_cancel=self._cancel_quotation_from_dialog,
+            parent=self,
+        )
+        dialog.setWindowTitle("Bản báo giá gần đây")
         dialog.exec()
 
     def _edit_quotation_from_dialog(self, quotation_id: int) -> bool:
@@ -1917,6 +2028,11 @@ class MainWindow(QMainWindow):
         self.order_tax_code.setText(str(quotation.get("tax_code", "") or ""))
         self.order_seller.setText(str(quotation.get("seller_name", "Cửa hàng") or "Cửa hàng"))
         self.order_note.setText(str(quotation.get("note", "") or ""))
+        
+        self.deposit_edit.blockSignals(True)
+        self.deposit_edit.setText(format_money(int(quotation.get("paid_amount", 0) or 0)))
+        self.deposit_edit.blockSignals(False)
+        
         self._suspend_customer_search = False
 
         self.customer_suggestion_list.clear()

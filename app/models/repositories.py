@@ -676,8 +676,9 @@ class InvoiceRepository:
                     paid_amount,
                     status,
                     export_path,
-                    exported_invoice_no
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    exported_invoice_no,
+                    doc_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["created_at"],
@@ -695,6 +696,7 @@ class InvoiceRepository:
                     payload.get("status", "pending"),
                     payload.get("export_path", ""),
                     payload.get("exported_invoice_no", ""),
+                    payload.get("doc_type", "quotation"),
                 ),
             )
             quotation_id = int(cursor.lastrowid)
@@ -752,7 +754,8 @@ class InvoiceRepository:
                     total_amount = ?,
                     paid_amount = ?,
                     status = 'pending',
-                    exported_invoice_no = ''
+                    exported_invoice_no = '',
+                    doc_type = ?
                 WHERE id = ?
                 """,
                 (
@@ -768,6 +771,7 @@ class InvoiceRepository:
                     int(payload.get("ship_fee", 0)),
                     int(payload["total_amount"]),
                     min(max(int(payload.get("paid_amount", 0)), 0), int(payload["total_amount"])),
+                    payload.get("doc_type", "quotation"),
                     quotation_id,
                 ),
             )
