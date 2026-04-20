@@ -102,6 +102,7 @@ class OrderController:
             "goods_amount": int(quotation_data.get("goods_amount", 0)),
             "ship_fee": int(quotation_data.get("ship_fee", 0)),
             "total_amount": int(quotation_data["total_amount"]),
+            "paid_amount": int(quotation_data.get("paid_amount", 0)),
             "export_path": quotation_data.get("export_path", ""),
         }
         return self.invoice_repo.create_quotation(payload, sort_items_by_unit_price_desc(lines))
@@ -125,6 +126,7 @@ class OrderController:
             "goods_amount": int(quotation_data.get("goods_amount", 0)),
             "ship_fee": int(quotation_data.get("ship_fee", 0)),
             "total_amount": int(quotation_data["total_amount"]),
+            "paid_amount": int(quotation_data.get("paid_amount", 0)),
         }
         self.invoice_repo.update_quotation(quotation_id, payload, sort_items_by_unit_price_desc(lines))
 

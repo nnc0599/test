@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS quotations (
     goods_amount INTEGER NOT NULL DEFAULT 0,
     ship_fee INTEGER NOT NULL DEFAULT 0,
     total_amount INTEGER NOT NULL DEFAULT 0,
+    paid_amount INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'pending',
     export_path TEXT,
     exported_invoice_no TEXT
@@ -235,6 +236,7 @@ REQUIRED_TABLE_COLUMNS = {
         "goods_amount": "INTEGER NOT NULL DEFAULT 0",
         "ship_fee": "INTEGER NOT NULL DEFAULT 0",
         "total_amount": "INTEGER NOT NULL DEFAULT 0",
+        "paid_amount": "INTEGER NOT NULL DEFAULT 0",
         "status": "TEXT NOT NULL DEFAULT 'pending'",
         "export_path": "TEXT",
         "exported_invoice_no": "TEXT",

@@ -153,6 +153,7 @@ class QuotationInventoryTests(unittest.TestCase):
                 "goods_amount": 4000,
                 "ship_fee": 0,
                 "total_amount": 4000,
+                "paid_amount": 1500,
                 "status": "pending",
                 "export_path": "",
                 "exported_invoice_no": "",
@@ -177,19 +178,27 @@ class QuotationInventoryTests(unittest.TestCase):
                 ("SP_TEST",),
             ).fetchone()[0]
             exported_row = conn.execute(
-                "SELECT status, exported_invoice_no FROM quotations WHERE id = ?",
+                "SELECT status, exported_invoice_no, paid_amount FROM quotations WHERE id = ?",
                 (quotation_id,),
             ).fetchone()
             invoice_row = conn.execute(
                 "SELECT invoice_no, seller_name FROM invoices WHERE invoice_no = ?",
                 ("000001",),
             ).fetchone()
+            payment_row = conn.execute(
+                "SELECT paid_amount, remaining_amount FROM payments WHERE invoice_no = ?",
+                ("000001",),
+            ).fetchone()
 
         self.assertEqual(quantity_after_export, 6)
         self.assertEqual(exported_row["status"], "exported")
         self.assertEqual(exported_row["exported_invoice_no"], "000001")
+        self.assertEqual(exported_row["paid_amount"], 1500)
         self.assertIsNotNone(invoice_row)
         self.assertEqual(invoice_row["seller_name"], "Nhân viên C")
+        self.assertIsNotNone(payment_row)
+        self.assertEqual(payment_row["paid_amount"], 1500)
+        self.assertEqual(payment_row["remaining_amount"], 2500)
 
 
 if __name__ == "__main__":

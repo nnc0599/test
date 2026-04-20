@@ -580,6 +580,9 @@ class InvoiceRepository:
         return f"{max_number + 1:06d}"
 
     def _insert_invoice_records(self, conn, payload: dict, lines: list[dict]) -> None:
+        total = max(0, int(payload["total_amount"]))
+        paid_amount = min(max(int(payload.get("paid_amount", 0)), 0), total)
+
         conn.execute(
             """
             INSERT INTO invoices (
@@ -595,7 +598,7 @@ class InvoiceRepository:
                 payload.get("email", ""),
                 payload.get("tax_code", ""),
                 payload.get("address", ""),
-                int(payload["total_amount"]),
+                total,
             ),
         )
 
@@ -633,8 +636,6 @@ class InvoiceRepository:
                     f"Sản phẩm {line['product_code']} không đủ số lượng để xuất kho."
                 )
 
-        paid_amount = int(payload.get("paid_amount", 0))
-        total = int(payload["total_amount"])
         conn.execute(
             """
             INSERT INTO payments (
@@ -672,10 +673,11 @@ class InvoiceRepository:
                     goods_amount,
                     ship_fee,
                     total_amount,
+                    paid_amount,
                     status,
                     export_path,
                     exported_invoice_no
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload["created_at"],
@@ -689,6 +691,7 @@ class InvoiceRepository:
                     int(payload.get("goods_amount", 0)),
                     int(payload.get("ship_fee", 0)),
                     int(payload["total_amount"]),
+                    min(max(int(payload.get("paid_amount", 0)), 0), int(payload["total_amount"])),
                     payload.get("status", "pending"),
                     payload.get("export_path", ""),
                     payload.get("exported_invoice_no", ""),
@@ -747,6 +750,7 @@ class InvoiceRepository:
                     goods_amount = ?,
                     ship_fee = ?,
                     total_amount = ?,
+                    paid_amount = ?,
                     status = 'pending',
                     exported_invoice_no = ''
                 WHERE id = ?
@@ -763,6 +767,7 @@ class InvoiceRepository:
                     int(payload.get("goods_amount", 0)),
                     int(payload.get("ship_fee", 0)),
                     int(payload["total_amount"]),
+                    min(max(int(payload.get("paid_amount", 0)), 0), int(payload["total_amount"])),
                     quotation_id,
                 ),
             )
@@ -826,6 +831,7 @@ class InvoiceRepository:
                     goods_amount,
                     ship_fee,
                     total_amount,
+                    paid_amount,
                     status,
                     export_path,
                     exported_invoice_no
@@ -877,6 +883,7 @@ class InvoiceRepository:
                     tax_code,
                     address,
                     total_amount,
+                    paid_amount,
                     status
                 FROM quotations
                 WHERE id = ?
@@ -909,6 +916,9 @@ class InvoiceRepository:
             if not item_rows:
                 raise ValueError("Bản báo giá không có sản phẩm để xuất hóa đơn")
 
+            total_amount = max(0, int(quotation["total_amount"] or 0))
+            paid_amount = min(max(int(quotation["paid_amount"] or 0), 0), total_amount)
+
             payload = {
                 "invoice_no": invoice_no,
                 "created_at": quotation["created_at"],
@@ -918,8 +928,8 @@ class InvoiceRepository:
                 "email": quotation["email"],
                 "tax_code": quotation["tax_code"],
                 "address": quotation["address"],
-                "total_amount": int(quotation["total_amount"]),
-                "paid_amount": 0,
+                "total_amount": total_amount,
+                "paid_amount": paid_amount,
                 "payment_date": quotation["created_at"],
             }
             self._insert_invoice_records(conn, payload, item_rows)
@@ -1028,9 +1038,21 @@ class InvoiceRepository:
         with get_connection() as conn:
             invoice = conn.execute(
                 """
-                SELECT invoice_no, created_at, customer_name, seller_name, phone, email, tax_code, address, total_amount
+                SELECT
+                    invoices.invoice_no,
+                    invoices.created_at,
+                    invoices.customer_name,
+                    invoices.seller_name,
+                    invoices.phone,
+                    invoices.email,
+                    invoices.tax_code,
+                    invoices.address,
+                    invoices.total_amount,
+                    COALESCE(payments.paid_amount, 0) AS paid_amount,
+                    COALESCE(payments.remaining_amount, invoices.total_amount) AS remaining_amount
                 FROM invoices
-                WHERE invoice_no = ?
+                LEFT JOIN payments ON payments.invoice_no = invoices.invoice_no
+                WHERE invoices.invoice_no = ?
                 """,
                 (invoice_no,),
             ).fetchone()
@@ -1147,7 +1169,8 @@ class InvoiceRepository:
                     )
 
             # Tạo lại bản ghi thanh toán
-            total = int(payload["total_amount"])
+            total = max(0, int(payload["total_amount"]))
+            paid_amount = min(max(int(payload.get("paid_amount", 0)), 0), total)
             conn.execute(
                 """
                 INSERT INTO payments (
@@ -1161,8 +1184,8 @@ class InvoiceRepository:
                     payload["created_at"],
                     payload.get("payment_date", payload["created_at"]),
                     total,
-                    int(payload.get("paid_amount", 0)),
-                    total - int(payload.get("paid_amount", 0)),
+                    paid_amount,
+                    total - paid_amount,
                 ),
             )
 
