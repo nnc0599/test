@@ -45,3 +45,4 @@ exe = EXE(
     entitlements_file=None,
     onefile=True,
 )
+

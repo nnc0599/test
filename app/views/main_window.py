@@ -1541,8 +1541,7 @@ class MainWindow(QMainWindow):
         self._populate_order_price_options(product)
         selected_price = self._current_price_option_value() or get_default_order_price(product)
         self.order_price_spin.setValue(selected_price)
-        stock = self._selected_product_stock
-        self.order_qty_spin.setMaximum(max(stock, 1))
+        self.order_qty_spin.setMaximum(1_000_000_000)
 
     def _refresh_selected_product_price_for_customer_group(self) -> None:
         if self.selected_product_code and self.selected_product_code in self.product_map:
@@ -1680,10 +1679,6 @@ class MainWindow(QMainWindow):
 
         qty = self.order_qty_spin.value()
         unit_price = self.order_price_spin.value()
-        stock = int(product["quantity"])
-        if qty > stock:
-            QMessageBox.warning(self, "Vượt tồn kho", "Số lượng nhập vượt quá tồn kho hiện tại")
-            return
 
         line = {
             "product_code": product["product_code"],
@@ -1975,10 +1970,11 @@ class MainWindow(QMainWindow):
 
     def _open_recent_orders(self) -> None:
         dialog = RecentQuotationsDialog(
-            load_rows=lambda: [r for r in self.order_controller.list_recent_quotations(200) if r.get("doc_type") == "order"],
+            load_rows=lambda: self.order_controller.list_recent_orders(200),
             on_edit=self._edit_quotation_from_dialog,
             on_export=self._export_quotation_from_dialog,
             on_cancel=self._cancel_quotation_from_dialog,
+            show_paid_amount=True,
             parent=self,
         )
         dialog.setWindowTitle("Đơn đặt hàng gần đây")
@@ -1986,7 +1982,7 @@ class MainWindow(QMainWindow):
 
     def _open_recent_quotations(self) -> None:
         dialog = RecentQuotationsDialog(
-            load_rows=lambda: [r for r in self.order_controller.list_recent_quotations(200) if r.get("doc_type", "quotation") == "quotation"],
+            load_rows=lambda: self.order_controller.list_recent_pending_quotations(200),
             on_edit=self._edit_quotation_from_dialog,
             on_export=self._export_quotation_from_dialog,
             on_cancel=self._cancel_quotation_from_dialog,
@@ -2083,10 +2079,11 @@ class MainWindow(QMainWindow):
 
         quotation = detail["quotation"]
         items = detail["items"]
+        export_created_at = now_iso_utc7()
         invoice_no = self.order_controller.generate_invoice_no()
         invoice_data = {
             "invoice_no": invoice_no,
-            "created_at": quotation["created_at"],
+            "created_at": export_created_at,
             "customer_name": quotation["customer_name"],
             "seller_name": quotation.get("seller_name", "Cửa hàng"),
             "phone": quotation.get("phone", ""),
@@ -2115,7 +2112,11 @@ class MainWindow(QMainWindow):
                 output_name=build_invoice_output_name(invoice_no, quotation.get("customer_name", "")),
             )
             try:
-                self.order_controller.export_quotation_to_invoice(quotation_id, invoice_no)
+                self.order_controller.export_quotation_to_invoice(
+                    quotation_id,
+                    invoice_no,
+                    export_created_at=export_created_at,
+                )
             except Exception:
                 self._remove_exported_file(export_path)
                 raise
@@ -2155,7 +2156,13 @@ class MainWindow(QMainWindow):
 
         try:
             invoice_no = self.order_controller.generate_invoice_no()
-            customer_data, invoice_data, export_lines = self._build_order_document_data(invoice_no=invoice_no)
+            customer_data, quotation_data, export_lines = self._build_order_document_data(invoice_no=invoice_no)
+            invoice_data = dict(quotation_data)
+            invoice_data["invoice_no"] = invoice_no
+            if self._editing_quotation_id is not None:
+                export_created_at = now_iso_utc7()
+                invoice_data["created_at"] = export_created_at
+                invoice_data["payment_date"] = export_created_at
             if not self._show_document_preview(invoice_data, export_lines, "invoice"):
                 return
 
@@ -2173,10 +2180,14 @@ class MainWindow(QMainWindow):
                     self.order_controller.update_quotation(
                         self._editing_quotation_id,
                         customer_data,
-                        invoice_data,
+                        quotation_data,
                         export_lines,
                     )
-                    self.order_controller.export_quotation_to_invoice(self._editing_quotation_id, invoice_no)
+                    self.order_controller.export_quotation_to_invoice(
+                        self._editing_quotation_id,
+                        invoice_no,
+                        export_created_at=invoice_data["created_at"],
+                    )
             except Exception:
                 self._remove_exported_file(export_path)
                 raise

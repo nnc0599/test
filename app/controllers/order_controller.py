@@ -48,6 +48,22 @@ class OrderController:
     def list_recent_quotations(self, limit: int = 50) -> list[dict]:
         return self.invoice_repo.list_recent_quotations(limit)
 
+    def list_recent_orders(self, limit: int = 50) -> list[dict]:
+        return [
+            row
+            for row in self.list_recent_quotations(limit)
+            if str(row.get("doc_type") or "quotation") == "order"
+            or int(row.get("paid_amount", 0) or 0) > 0
+        ]
+
+    def list_recent_pending_quotations(self, limit: int = 50) -> list[dict]:
+        return [
+            row
+            for row in self.list_recent_quotations(limit)
+            if str(row.get("doc_type") or "quotation") == "quotation"
+            and int(row.get("paid_amount", 0) or 0) <= 0
+        ]
+
     def get_quotation_detail(self, quotation_id: int) -> dict | None:
         detail = self.invoice_repo.get_quotation_detail(quotation_id)
         if not detail:
@@ -90,6 +106,9 @@ class OrderController:
             raise ValueError("Họ tên khách hàng không được để trống")
 
         created_at = quotation_data.get("created_at") or now_iso_utc7()
+        paid_amount = int(quotation_data.get("paid_amount", 0))
+        doc_type = quotation_data.get("doc_type", "quotation")
+
         payload = {
             "created_at": created_at,
             "customer_name": customer_data["full_name"],
@@ -102,8 +121,9 @@ class OrderController:
             "goods_amount": int(quotation_data.get("goods_amount", 0)),
             "ship_fee": int(quotation_data.get("ship_fee", 0)),
             "total_amount": int(quotation_data["total_amount"]),
-            "paid_amount": int(quotation_data.get("paid_amount", 0)),
+            "paid_amount": paid_amount,
             "export_path": quotation_data.get("export_path", ""),
+            "doc_type": doc_type,
         }
         return self.invoice_repo.create_quotation(payload, sort_items_by_unit_price_desc(lines))
 
@@ -114,6 +134,9 @@ class OrderController:
             raise ValueError("Họ tên khách hàng không được để trống")
 
         created_at = quotation_data.get("created_at") or now_iso_utc7()
+        paid_amount = int(quotation_data.get("paid_amount", 0))
+        doc_type = quotation_data.get("doc_type", "quotation")
+
         payload = {
             "created_at": created_at,
             "customer_name": customer_data["full_name"],
@@ -126,7 +149,8 @@ class OrderController:
             "goods_amount": int(quotation_data.get("goods_amount", 0)),
             "ship_fee": int(quotation_data.get("ship_fee", 0)),
             "total_amount": int(quotation_data["total_amount"]),
-            "paid_amount": int(quotation_data.get("paid_amount", 0)),
+            "paid_amount": paid_amount,
+            "doc_type": doc_type,
         }
         self.invoice_repo.update_quotation(quotation_id, payload, sort_items_by_unit_price_desc(lines))
 
@@ -163,7 +187,7 @@ class OrderController:
     def delete_invoice(self, invoice_no: str) -> None:
         self.invoice_repo.delete_invoice(invoice_no)
 
-    def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str) -> None:
+    def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str, export_created_at: str | None = None) -> None:
         detail = self.get_quotation_detail(quotation_id)
         if not detail:
             raise ValueError("Không tìm thấy bản báo giá")
@@ -178,4 +202,4 @@ class OrderController:
             "note": "Tự động cập nhật khi xuất hóa đơn từ báo giá",
         }
         self.customer_repo.upsert_customer(customer_data)
-        self.invoice_repo.export_quotation_to_invoice(quotation_id, invoice_no)
+        self.invoice_repo.export_quotation_to_invoice(quotation_id, invoice_no, export_created_at=export_created_at)

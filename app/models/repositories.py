@@ -847,7 +847,7 @@ class InvoiceRepository:
         with get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT id, customer_name, seller_name, note, phone, goods_amount, total_amount, created_at, doc_type
+                SELECT id, customer_name, seller_name, note, phone, goods_amount, total_amount, paid_amount, created_at, doc_type
                 FROM quotations
                 WHERE status = 'pending'
                 ORDER BY created_at DESC, id DESC
@@ -911,10 +911,10 @@ class InvoiceRepository:
     def delete_quotation(self, quotation_id: int) -> None:
         with get_connection() as conn:
             existing = conn.execute(
-                "SELECT doc_type FROM quotations WHERE id = ?",
+                "SELECT doc_type, status FROM quotations WHERE id = ?",
                 (quotation_id,)
             ).fetchone()
-            if existing and existing["doc_type"] == "order":
+            if existing and existing["doc_type"] == "order" and str(existing["status"] or "") != "exported":
                 old_items = conn.execute(
                     "SELECT product_code, quantity FROM quotation_items WHERE quotation_id = ?",
                     (quotation_id,),
@@ -926,7 +926,7 @@ class InvoiceRepository:
                     )
             conn.execute("DELETE FROM quotations WHERE id = ?", (quotation_id,))
 
-    def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str) -> None:
+    def export_quotation_to_invoice(self, quotation_id: int, invoice_no: str, export_created_at: str | None = None) -> None:
         with get_connection() as conn:
             quotation = conn.execute(
                 """
@@ -976,10 +976,11 @@ class InvoiceRepository:
 
             total_amount = max(0, int(quotation["total_amount"] or 0))
             paid_amount = min(max(int(quotation["paid_amount"] or 0), 0), total_amount)
+            created_at = str(export_created_at or quotation["created_at"] or now_iso_utc7())
 
             payload = {
                 "invoice_no": invoice_no,
-                "created_at": quotation["created_at"],
+                "created_at": created_at,
                 "customer_name": quotation["customer_name"],
                 "seller_name": quotation["seller_name"],
                 "phone": quotation["phone"],
@@ -988,7 +989,7 @@ class InvoiceRepository:
                 "address": quotation["address"],
                 "total_amount": total_amount,
                 "paid_amount": paid_amount,
-                "payment_date": quotation["created_at"],
+                "payment_date": created_at,
             }
             if str(quotation["doc_type"] or "quotation") == "order":
                 # Already deducted when saving the order, so bypass stock deduction in invoice creation
